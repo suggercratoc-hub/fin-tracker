@@ -101,6 +101,28 @@ initTelegram();
   .budget-line { position:relative; }
   .budget-limit-marker { position:absolute; top:0; bottom:0; width:2px; border-radius:2px; background:var(--yellow); opacity:0.7; }
   .budget-over .cat-val { color:var(--red) !important; }
+  /* SUBCATEGORY */
+  .subcat-item { display:flex; justify-content:space-between; font-size:11px; color:var(--text3); padding:3px 0 3px 22px; }
+  .subcat-item span:last-child { font-weight:500; color:var(--text2); }
+  /* WEEKLY */
+  .week-item { margin-bottom:12px; }
+  .week-header { display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px; }
+  .week-label { color:var(--text2); font-weight:500; }
+  .week-val { color:var(--text2); font-weight:600; }
+  .week-current .week-label { color:var(--text1); }
+  .week-current .week-val   { color:var(--text1); }
+  /* PLANS */
+  .plan-item { display:flex; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .plan-item:last-child { border-bottom:none; }
+  .plan-day { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; }
+  .plan-day.soon    { background:rgba(255,77,79,0.12);   color:var(--red); }
+  .plan-day.week    { background:rgba(255,187,51,0.12);  color:var(--yellow); }
+  .plan-day.later   { background:rgba(90,90,90,0.15);    color:var(--text3); }
+  .plan-day.paid    { background:rgba(0,196,154,0.12);   color:var(--teal); }
+  .plan-info { flex:1; }
+  .plan-name { font-size:13px; font-weight:500; }
+  .plan-meta { font-size:11px; color:var(--text3); margin-top:2px; }
+  .plan-amount { font-size:14px; font-weight:700; color:var(--text2); white-space:nowrap; }
 
   /* LAYOUT */
   .grid-2 { display:grid; grid-template-columns:1.55fr 1fr; gap:16px; margin-bottom:16px; }
@@ -368,6 +390,16 @@ window.onerror = function(msg, src, line) {
       <div class="card">
         <div class="card-title">Последние операции</div>
         <div class="scrollable" id="tx-list-dash"></div>
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top:16px">
+      <div class="card">
+        <div class="card-title">Расходы по неделям</div>
+        <div id="weekly-spending"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Предстоящие платежи</div>
+        <div id="planned-payments"></div>
       </div>
     </div>
   </div>
@@ -716,6 +748,75 @@ function renderDashboard(monthKey) {
   renderDebtList(debts, totalDebt, 'debt-list-dash', 'debt-total-dash');
   renderDebtCapacity(debts, totalDebt, totalInc, balance);
   renderTxList([...ops].sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0, 10), 'tx-list-dash');
+  renderWeeklySpending(ops, monthKey);
+  renderPlannedPayments(allData.plans || [], ops, monthKey);
+}
+
+function renderWeeklySpending(ops, monthKey) {
+  const el = document.getElementById('weekly-spending');
+  if (!el) return;
+  const [y, m] = monthKey.split('-').map(Number);
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === y && (today.getMonth() + 1) === m;
+  const todayDay = isCurrentMonth ? today.getDate() : 32;
+
+  const weeks = [
+    { label: 'Неделя 1 (1–7)',   days: [1,7],  total: 0 },
+    { label: 'Неделя 2 (8–14)',  days: [8,14], total: 0 },
+    { label: 'Неделя 3 (15–21)', days: [15,21],total: 0 },
+    { label: 'Неделя 4 (22+)',   days: [22,31],total: 0 },
+  ];
+  ops.filter(o => o.type === 'расход').forEach(o => {
+    const d = parseDate(o.date); if (!d) return;
+    const day = d.getDate();
+    const wi = day <= 7 ? 0 : day <= 14 ? 1 : day <= 21 ? 2 : 3;
+    weeks[wi].total += Number(o.amount);
+  });
+
+  const maxTotal = Math.max(...weeks.map(w => w.total), 1);
+  const currentWeek = todayDay <= 7 ? 0 : todayDay <= 14 ? 1 : todayDay <= 21 ? 2 : 3;
+
+  el.innerHTML = weeks.map((w, i) => {
+    const pct = Math.round(w.total / maxTotal * 100);
+    const isCur = isCurrentMonth && i === currentWeek;
+    return `<div class="week-item${isCur ? ' week-current' : ''}">` +
+      `<div class="week-header"><span class="week-label">${w.label}${isCur ? ' ← сейчас' : ''}</span><span class="week-val">${fmt(w.total)}</span></div>` +
+      `<div class="cat-bar-wrap"><div class="cat-bar" style="width:${pct}%;background:linear-gradient(90deg,#2563eb,#3b82f6)"></div></div>` +
+      `</div>`;
+  }).join('');
+}
+
+function renderPlannedPayments(plans, ops, monthKey) {
+  const el = document.getElementById('planned-payments');
+  if (!el) return;
+  if (!plans || !plans.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Нет запланированных платежей</div>';
+    return;
+  }
+  const [y, m] = monthKey.split('-').map(Number);
+  const today = new Date();
+  const isCurrentMonth = today.getFullYear() === y && (today.getMonth() + 1) === m;
+  const todayDay = isCurrentMonth ? today.getDate() : 0;
+
+  const PLAN_ICONS = { 'аренда': 'ri-home-4-line', 'кредит': 'ri-bank-card-line', 'подписка': 'ri-repeat-line', 'прочее': 'ri-calendar-event-line' };
+
+  el.innerHTML = [...plans].sort((a, b) => a.day - b.day).map(p => {
+    const daysLeft = p.day - todayDay;
+    const isPaid = ops.some(o => o.type === 'расход' && Math.abs(Number(o.amount) - p.amount) < p.amount * 0.2 &&
+      parseDate(o.date)?.getMonth() === m - 1);
+    let cls, status;
+    if (isPaid)          { cls = 'paid';  status = '✓ оплачено'; }
+    else if (daysLeft <= 0) { cls = 'soon';  status = '⚠️ просрочен'; }
+    else if (daysLeft <= 3) { cls = 'soon';  status = 'через ' + daysLeft + ' дн.'; }
+    else if (daysLeft <= 7) { cls = 'week';  status = 'через ' + daysLeft + ' дн.'; }
+    else                    { cls = 'later'; status = daysLeft > 0 ? daysLeft + '-го числа' : p.day + '-го числа'; }
+    const icon = PLAN_ICONS[p.type] || PLAN_ICONS['прочее'];
+    return `<div class="plan-item">` +
+      `<div class="plan-day ${cls}">${p.day}</div>` +
+      `<div class="plan-info"><div class="plan-name">${p.name}</div><div class="plan-meta"><i class="${icon}"></i> ${p.type} · ${status}</div></div>` +
+      `<div class="plan-amount">₽ ${p.amount.toLocaleString('ru')}</div>` +
+      `</div>`;
+  }).join('');
 }
 
 function renderDebtCapacity(debts, totalDebt, monthlyIncome, freeBalance) {
@@ -756,10 +857,15 @@ function renderExpensesView(ops) {
   document.getElementById('expenses-total').textContent = fmt(total);
   document.getElementById('expenses-count').textContent = list.length+' операций';
 
-  const catMap={};
-  list.forEach(o=>{ const c=o.category||'Прочее'; catMap[c]=(catMap[c]||0)+Number(o.amount); });
-  const cats=Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
-  renderCatBarsInto(cats, total, 'expenses-cats', 'var(--red)');
+  const catMap = {};
+  list.forEach(o => {
+    const c = o.category || 'Прочее';
+    if (!catMap[c]) catMap[c] = { total: 0, subs: {} };
+    catMap[c].total += Number(o.amount);
+    if (o.subcategory) catMap[c].subs[o.subcategory] = (catMap[c].subs[o.subcategory] || 0) + Number(o.amount);
+  });
+  const cats = Object.entries(catMap).map(([k,v]) => [k, v.total, v.subs]).sort((a,b) => b[1]-a[1]);
+  renderCatBarsWithSubs(cats, total, 'expenses-cats', 'var(--red)');
   renderTxList(list, 'expenses-list');
 }
 
@@ -779,23 +885,48 @@ function renderOperationsView(ops) {
 }
 
 // ── HELPERS ──
-function renderCategoryBars(cats, total) { renderCatBarsInto(cats, total, 'category-bars', 'var(--red)'); }
+function renderCategoryBars(cats, total) {
+  // Build cats with subcategories for dashboard
+  const ops = allData ? allData.operations : [];
+  const catMap = {};
+  ops.filter(o => o.type === 'расход').forEach(o => {
+    const c = o.category || 'Прочее';
+    if (!catMap[c]) catMap[c] = { total: 0, subs: {} };
+    catMap[c].total += Number(o.amount);
+    if (o.subcategory) catMap[c].subs[o.subcategory] = (catMap[c].subs[o.subcategory] || 0) + Number(o.amount);
+  });
+  const catsWithSubs = cats.map(([name, val]) => [name, val, catMap[name]?.subs || {}]);
+  renderCatBarsWithSubs(catsWithSubs, total, 'category-bars', 'var(--red)');
+}
 
-function renderCatBarsInto(cats, total, elId, totalColor) {
+function renderCatBarsWithSubs(cats, total, elId, totalColor) {
   const el = document.getElementById(elId);
   if (!cats.length) { el.innerHTML='<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Нет данных</div>'; return; }
   const maxVal = cats[0][1];
   const budgets = (allData.budgets || []);
-  let html = cats.map(([name, val]) => {
+  let html = cats.map(([name, val, subs]) => {
     const cfg = getCat(name), pct = Math.round(val / maxVal * 100);
     const bud = budgets.find(b => b.category === name);
     const isOver = bud && val > bud.limit;
     const budMarker = bud ? `<div class="budget-limit-marker" style="left:${Math.min(Math.round(bud.limit/maxVal*100),100)}%"></div>` : '';
-    const budNote = bud ? `<span style="font-size:10px;color:${isOver?'var(--red)':'var(--text3)'};margin-left:4px">${isOver?'⚠️':''}лимит ${fmt(bud.limit)}</span>` : '';
-    return `<div class="cat-item${isOver?' budget-over':''}"><div class="cat-header"><span class="cat-name-wrap"><i class="${cfg.icon}" style="color:${cfg.color}"></i> ${name}${budNote}</span><span class="cat-val">${fmt(val)}</span></div><div class="cat-bar-wrap budget-line"><div class="cat-bar" style="width:${pct}%;background:linear-gradient(90deg,${cfg.grad[0]},${cfg.grad[1]})"></div>${budMarker}</div></div>`;
+    const budNote = bud ? `<span style="font-size:10px;color:${isOver?'var(--red)':'var(--text3)'};margin-left:4px">${isOver?'⚠️ ':''}лимит ${fmt(bud.limit)}</span>` : '';
+    const subEntries = Object.entries(subs || {}).sort((a,b) => b[1]-a[1]);
+    const subHtml = subEntries.map(([sc, sv]) =>
+      `<div class="subcat-item"><span>${sc}</span><span>${fmt(sv)}</span></div>`
+    ).join('');
+    return `<div class="cat-item${isOver?' budget-over':''}">` +
+      `<div class="cat-header"><span class="cat-name-wrap"><i class="${cfg.icon}" style="color:${cfg.color}"></i> ${name}${budNote}</span><span class="cat-val">${fmt(val)}</span></div>` +
+      `<div class="cat-bar-wrap budget-line"><div class="cat-bar" style="width:${pct}%;background:linear-gradient(90deg,${cfg.grad[0]},${cfg.grad[1]})"></div>${budMarker}</div>` +
+      subHtml +
+      `</div>`;
   }).join('');
   html += `<div class="total-row"><span class="total-label">Итого</span><span class="total-val" style="color:${totalColor}">${fmt(total)}</span></div>`;
   el.innerHTML = html;
+}
+
+function renderCatBarsInto(cats, total, elId, totalColor) {
+  // Simple version for income (no subcategories needed)
+  renderCatBarsWithSubs(cats.map(([n,v]) => [n, v, {}]), total, elId, totalColor);
 }
 
 function renderDebtList(debts, total, listId, totalId) {
