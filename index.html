@@ -459,12 +459,21 @@ function renderView(view) {
 // ── LOAD ──
 async function loadData() {
   document.getElementById('loadingOverlay').classList.add('active');
+
   try {
-    const res = await fetch(API_URL);
+    const res = await fetch(API_URL + '?t=' + Date.now(), {
+      cache: 'no-store',
+      headers: {
+        'Accept': 'application/json'
+      }
+    });
+
     allData = await res.json();
+
     populateMonthSelectors();
     const month = document.getElementById('monthSelect').value;
     renderDashboard(month);
+
   } catch(e) {
     document.getElementById('header-subtitle').textContent = 'Ошибка загрузки';
   } finally {
