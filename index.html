@@ -4,11 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ФинТрекер — Дашборд</title>
-<!-- Fonts: асинхронно, не блокируют рендер -->
-<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-<noscript><link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
+<!-- Иконки: async, не блокируют рендер -->
 <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet"></noscript>
 <script>
@@ -50,7 +46,7 @@ initTelegram();
     --shadow:    0 4px 24px rgba(0,0,0,0.35);
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bg); color:var(--text1); font-family:'Rubik',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; min-height:100vh; }
+  body { background:var(--bg); color:var(--text1); font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Segoe UI',Roboto,sans-serif; min-height:100vh; }
 
   /* SIDEBAR */
   .sidebar { position:fixed; left:0; top:0; bottom:0; width:230px; background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:28px 0; z-index:100; }
@@ -71,8 +67,8 @@ initTelegram();
   .header h1 { font-size:22px; font-weight:700; }
   .header p  { font-size:13px; color:var(--text3); margin-top:3px; }
   .header-right { display:flex; align-items:center; gap:12px; }
-  .month-selector { background:var(--bg2); border:1px solid var(--border); color:var(--text1); padding:9px 14px; border-radius:10px; font-size:13px; font-family:'Rubik',sans-serif; cursor:pointer; outline:none; }
-  .btn-refresh { background:var(--bg2); border:1px solid var(--border); color:var(--text2); padding:9px 14px; border-radius:10px; font-size:13px; font-family:'Rubik',sans-serif; cursor:pointer; display:flex; align-items:center; gap:6px; }
+  .month-selector { background:var(--bg2); border:1px solid var(--border); color:var(--text1); padding:9px 14px; border-radius:10px; font-size:13px; font-family:inherit; cursor:pointer; outline:none; }
+  .btn-refresh { background:var(--bg2); border:1px solid var(--border); color:var(--text2); padding:9px 14px; border-radius:10px; font-size:13px; font-family:inherit; cursor:pointer; display:flex; align-items:center; gap:6px; }
 
   /* KPI */
   .kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:20px; }
@@ -183,7 +179,7 @@ initTelegram();
   .mobile-logo { display:flex; align-items:center; gap:8px; font-size:16px; font-weight:700; }
   .mobile-logo .logo-icon { width:28px; height:28px; font-size:13px; }
   .mobile-header-right { display:flex; align-items:center; gap:8px; }
-  .mobile-header select { background:var(--bg3); border:1px solid var(--border); color:var(--text1); padding:6px 10px; border-radius:8px; font-size:12px; font-family:'Rubik',sans-serif; outline:none; }
+  .mobile-header select { background:var(--bg3); border:1px solid var(--border); color:var(--text1); padding:6px 10px; border-radius:8px; font-size:12px; font-family:inherit; outline:none; }
   .mobile-refresh { background:var(--bg3); border:1px solid var(--border); color:var(--text2); width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:16px; cursor:pointer; }
 
   /* RESPONSIVE */
@@ -407,7 +403,7 @@ window.onerror = function(msg, src, line) {
 </main>
 
 <script>
-const API_URL = 'https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec';
+const DATA_URL = './data.json';
 
 let lineChartInst = null, donutChartInst = null;
 let allData = null;
@@ -537,67 +533,10 @@ function showError(msg) {
     '</div>';
 }
 
-// Определяем iOS: fetch на iOS делает медленный CORS preflight из-за редиректа Apps Script
-function isIOS() {
-  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-}
-
-// JSONP — не делает preflight, работает быстро на iOS
-function fetchJSONP(timeout) {
-  return new Promise(function(resolve, reject) {
-    var cbName = '_fc' + Date.now();
-    var script = document.createElement('script');
-    var timer = setTimeout(function() {
-      cleanup();
-      reject(new Error('timeout'));
-    }, timeout || 15000);
-    function cleanup() {
-      clearTimeout(timer);
-      delete window[cbName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-    }
-    window[cbName] = function(data) {
-      cleanup();
-      resolve(data);
-    };
-    script.src = API_URL + '?callback=' + cbName;
-    script.onerror = function() {
-      cleanup();
-      reject(new Error('network'));
-    };
-    document.head.appendChild(script);
-  });
-}
-
 async function fetchAPI() {
-  // На iOS fetch делает медленный CORS preflight — сразу используем JSONP
-  const ios = isIOS();
-  if (ios) {
-    showOverlay('Загрузка (iOS/JSONP)...');
-    return fetchJSONP(15000);
-  }
-
-  // Десктоп — стандартный fetch
-  const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 12000);
-  try {
-    const res = await fetch(API_URL, {
-      redirect: 'follow',
-      mode: 'cors',
-      credentials: 'omit',
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal
-    });
-    clearTimeout(tid);
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return await res.json();
-  } catch(e) {
-    clearTimeout(tid);
-    if (e.name === 'AbortError') throw new Error('timeout');
-    // Запасной JSONP если fetch упал по другой причине
-    return fetchJSONP(12000);
-  }
+  const res = await fetch(DATA_URL);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  return res.json();
 }
 
 async function loadData() {
@@ -614,31 +553,13 @@ async function loadData() {
 
   showOverlay('Загрузка данных...');
 
-  // Через 4 сек — показываем пояснение (сервер "просыпается" после простоя)
-  const slowTimer = setTimeout(() => {
-    const el = document.getElementById('loadingOverlay');
-    if (el && el.style.display !== 'none') {
-      el.innerHTML = '<div class="spinner"></div>' +
-        '<div style="text-align:center;max-width:260px">' +
-        '<div style="margin-bottom:6px">Загрузка данных...</div>' +
-        '<div style="font-size:11px;color:var(--text3)">Сервер просыпается после простоя,<br>подождите ещё немного ☕</div>' +
-        '</div>';
-    }
-  }, 4000);
-
   try {
     const data = await fetchAPI();
-    clearTimeout(slowTimer);
     setCache(data);
     hideOverlay();
     applyData(data);
   } catch(e) {
-    clearTimeout(slowTimer);
-    const ios = isIOS();
-    const msg = e.message === 'timeout'
-      ? 'Таймаут (' + (ios ? 'JSONP/iOS' : 'fetch') + ')\nОбнови страницу.'
-      : 'Ошибка: ' + e.message + (ios ? ' [iOS]' : ' [fetch]');
-    showError(msg);
+    showError('Ошибка загрузки: ' + e.message);
   }
 }
 
