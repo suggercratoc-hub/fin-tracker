@@ -371,12 +371,7 @@
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec';
 
-if (window.Telegram && window.Telegram.WebApp) {
-   window.Telegram.WebApp.ready();
-  window.Telegram.WebApp.expand();
-  window.Telegram.WebApp.setHeaderColor('#121212');
-  window.Telegram.WebApp.setBackgroundColor('#121212');
-}
+
 
 let lineChartInst = null, donutChartInst = null;
 let allData = null;
@@ -635,7 +630,18 @@ function renderLineChart(ops, monthKey) {
   });
 }
 
-loadData();
+document.addEventListener("DOMContentLoaded", function () {
+
+  if (window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.ready();
+    window.Telegram.WebApp.expand();
+    window.Telegram.WebApp.setHeaderColor('#121212');
+    window.Telegram.WebApp.setBackgroundColor('#121212');
+  }
+
+  loadData();
+
+});
 </script>
 </body>
 </html>
