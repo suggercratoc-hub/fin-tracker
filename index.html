@@ -201,7 +201,7 @@
   </div>
   <div class="mobile-header-right">
     <select id="monthSelectMobile" onchange="syncMonth('mobile')"></select>
-    <div class="mobile-refresh" onclick="loadData()"><i class="ri-refresh-line"></i></div>
+    <div class="mobile-refresh" onclick="forceRefresh()"><i class="ri-refresh-line"></i></div>
   </div>
 </div>
 
@@ -244,7 +244,7 @@
     </div>
     <div class="header-right">
       <select class="month-selector" id="monthSelect" onchange="syncMonth('desktop')"></select>
-      <button class="btn-refresh" onclick="loadData()"><i class="ri-refresh-line"></i> Обновить</button>
+      <button class="btn-refresh" onclick="forceRefresh()"><i class="ri-refresh-line"></i> Обновить</button>
     </div>
   </div>
 
@@ -369,7 +369,7 @@
 </main>
 
 <script>
-const API_URL = 'https://script.google.com/macros/s/AKfycbz12ESMDROyVIHm7zkKh2lXX3fQb8Jt9gLPltRM37NiC85pgWVY2C2YXln4JnNK5oTT/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec';
 
 if (window.Telegram && window.Telegram.WebApp) {
   window.Telegram.WebApp.expand();
@@ -461,16 +461,57 @@ function renderView(view) {
 }
 
 // ── LOAD ──
-async function loadData() {
-  document.getElementById('loadingOverlay').classList.add('active');
+const CACHE_KEY = 'fintracker_data';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCached() {
   try {
-    const res = await fetch(API_URL);
-    allData = await res.json();
-    populateMonthSelectors();
-    const month = document.getElementById('monthSelect').value;
-    renderDashboard(month);
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const { ts, data } = JSON.parse(raw);
+    if (Date.now() - ts > CACHE_TTL) return null;
+    return data;
+  } catch(e) { return null; }
+}
+
+function setCache(data) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data })); } catch(e) {}
+}
+
+function applyData(data) {
+  allData = data;
+  populateMonthSelectors();
+  const month = document.getElementById('monthSelect').value;
+  renderDashboard(month);
+  if (currentView !== 'dashboard') renderView(currentView);
+}
+
+async function loadData() {
+  const cached = getCached();
+  if (cached) {
+    applyData(cached);
+    // refresh silently in background
+    document.getElementById('header-subtitle').textContent = 'Загрузка обновлений...';
+    fetch(API_URL, { redirect: 'follow' })
+      .then(r => r.json())
+      .then(data => { setCache(data); applyData(data); })
+      .catch(() => {
+        document.getElementById('header-subtitle').textContent = 'Данные из кэша';
+      });
+    return;
+  }
+
+  document.getElementById('loadingOverlay').classList.add('active');
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000));
+  try {
+    const res = await Promise.race([fetch(API_URL, { redirect: 'follow' }), timeout]);
+    const data = await res.json();
+    setCache(data);
+    applyData(data);
   } catch(e) {
-    document.getElementById('header-subtitle').textContent = 'Ошибка загрузки';
+    const subtitle = e.message === 'timeout' ? 'Сервер не отвечает. Попробуйте обновить.' : 'Ошибка загрузки';
+    document.getElementById('header-subtitle').textContent = subtitle;
+    // show refresh button hint
   } finally {
     document.getElementById('loadingOverlay').classList.remove('active');
   }
@@ -632,6 +673,11 @@ function renderLineChart(ops, monthKey) {
     ]},
     options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:{labels:{color:'#b3b3b3',boxWidth:10,boxHeight:10,borderRadius:3,useBorderRadius:true,font:{size:12,family:'Rubik'}}}, tooltip:{backgroundColor:'#1e1e1e',borderColor:'#2a2a2a',borderWidth:1,titleColor:'#fff',bodyColor:'#b3b3b3',padding:12,callbacks:{title:i=>`День ${i[0].label}`,label:ctx=>` ${ctx.dataset.label}: ₽ ${ctx.raw.toLocaleString('ru')}`}} }, scales:{ x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#5a5a5a',font:{size:11,family:'Rubik'},maxTicksLimit:8}}, y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#5a5a5a',font:{size:11,family:'Rubik'},callback:v=>'₽'+(v/1000).toFixed(0)+'k'}} } }
   });
+}
+
+function forceRefresh() {
+  try { localStorage.removeItem(CACHE_KEY); } catch(e) {}
+  loadData();
 }
 
 loadData();
