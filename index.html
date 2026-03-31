@@ -564,7 +564,9 @@ function fetchJSONP(timeout) {
 
 async function fetchAPI() {
   // На iOS fetch делает медленный CORS preflight — сразу используем JSONP
-  if (isIOS()) {
+  const ios = isIOS();
+  if (ios) {
+    showOverlay('Загрузка (iOS/JSONP)...');
     return fetchJSONP(15000);
   }
 
@@ -624,9 +626,10 @@ async function loadData() {
     applyData(data);
   } catch(e) {
     clearTimeout(slowTimer);
+    const ios = isIOS();
     const msg = e.message === 'timeout'
-      ? 'Сервер не ответил за 12 секунд.\nОбнови страницу — при следующем\nзапросе будет быстрее.'
-      : 'Ошибка загрузки данных';
+      ? 'Таймаут (' + (ios ? 'JSONP/iOS' : 'fetch') + ')\nОбнови страницу.'
+      : 'Ошибка: ' + e.message + (ios ? ' [iOS]' : ' [fetch]');
     showError(msg);
   }
 }
