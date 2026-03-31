@@ -4,10 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ФинТрекер — Дашборд</title>
-<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+<!-- Fonts: асинхронно, не блокируют рендер -->
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet"></noscript>
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer id="chartjs-script"></script>
 <style>
   :root {
     --bg:        #121212;
@@ -27,7 +32,7 @@
     --shadow:    0 4px 24px rgba(0,0,0,0.35);
   }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bg); color:var(--text1); font-family:'Rubik',sans-serif; min-height:100vh; }
+  body { background:var(--bg); color:var(--text1); font-family:'Rubik',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; min-height:100vh; }
 
   /* SIDEBAR */
   .sidebar { position:fixed; left:0; top:0; bottom:0; width:230px; background:var(--bg2); border-right:1px solid var(--border); display:flex; flex-direction:column; padding:28px 0; z-index:100; }
@@ -187,6 +192,21 @@
 </style>
 </head>
 <body>
+
+<!-- Глобальный перехватчик ошибок — показывает их на экране вместо чёрного экрана -->
+<script>
+window.onerror = function(msg, src, line) {
+  var el = document.getElementById('loadingOverlay');
+  if (el) {
+    el.style.display = 'flex';
+    el.innerHTML = '<div style="text-align:center;padding:24px;max-width:300px">' +
+      '<div style="font-size:28px;margin-bottom:10px">&#9888;</div>' +
+      '<div style="color:#fff;font-size:13px;margin-bottom:6px">' + msg + '</div>' +
+      '<div style="color:#5a5a5a;font-size:11px;margin-bottom:16px">строка ' + line + '</div>' +
+      '<button onclick="location.reload()" style="background:#7e5bef;color:#fff;border:none;padding:10px 22px;border-radius:10px;font-size:13px;cursor:pointer">Перезагрузить</button></div>';
+  }
+};
+</script>
 
 <div class="loading-overlay" id="loadingOverlay" style="display:flex">
   <div class="spinner"></div>
@@ -374,11 +394,12 @@ const API_URL = 'https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaon
 try {
   if (window.Telegram && window.Telegram.WebApp) {
     const twa = window.Telegram.WebApp;
-    twa.expand();
-    if (twa.setHeaderColor) twa.setHeaderColor('#121212');
-    if (twa.setBackgroundColor) twa.setBackgroundColor('#121212');
+    if (typeof twa.ready === 'function') twa.ready(); // сигнал Telegram: страница готова
+    if (typeof twa.expand === 'function') twa.expand();
+    if (typeof twa.setHeaderColor === 'function') twa.setHeaderColor('#121212');
+    if (typeof twa.setBackgroundColor === 'function') twa.setBackgroundColor('#121212');
   }
-} catch(e) {}
+} catch(e) { console.warn('[TWA]', e); }
 
 let lineChartInst = null, donutChartInst = null;
 let allData = null;
@@ -508,30 +529,71 @@ function showError(msg) {
     '</div>';
 }
 
+// Основной fetch с AbortController (надёжнее Promise.race на iOS)
+async function fetchAPI() {
+  const controller = new AbortController();
+  const tid = setTimeout(() => controller.abort(), 20000);
+  try {
+    const res = await fetch(API_URL, {
+      redirect: 'follow',
+      mode: 'cors',
+      credentials: 'omit',
+      headers: { 'Accept': 'application/json' },
+      signal: controller.signal
+    });
+    clearTimeout(tid);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } catch(e) {
+    clearTimeout(tid);
+    if (e.name === 'AbortError') throw new Error('timeout');
+    // JSONP-запасной вариант (обходит CORS/редирект на iOS WKWebView)
+    return new Promise(function(resolve, reject) {
+      var cbName = '_fc' + Date.now();
+      var timer = setTimeout(function() {
+        delete window[cbName];
+        if (script.parentNode) script.parentNode.removeChild(script);
+        reject(new Error('timeout'));
+      }, 20000);
+      window[cbName] = function(data) {
+        clearTimeout(timer);
+        delete window[cbName];
+        if (script.parentNode) script.parentNode.removeChild(script);
+        resolve(data);
+      };
+      var script = document.createElement('script');
+      script.src = API_URL + '?callback=' + cbName;
+      script.onerror = function() {
+        clearTimeout(timer);
+        delete window[cbName];
+        reject(new Error('network'));
+      };
+      document.head.appendChild(script);
+    });
+  }
+}
+
 async function loadData() {
   const cached = getCached();
   if (cached) {
     hideOverlay();
     applyData(cached);
-    // обновляем в фоне
-    fetch(API_URL, { redirect: 'follow' })
-      .then(r => r.json())
-      .then(data => { setCache(data); applyData(data); })
-      .catch(() => {});
+    // тихое обновление в фоне
+    fetchAPI()
+      .then(function(data) { setCache(data); applyData(data); })
+      .catch(function() {});
     return;
   }
 
   showOverlay('Загрузка данных...');
-  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000));
   try {
-    const res = await Promise.race([fetch(API_URL, { redirect: 'follow' }), timeout]);
-    const data = await res.json();
+    const data = await fetchAPI();
     setCache(data);
     hideOverlay();
     applyData(data);
   } catch(e) {
     const msg = e.message === 'timeout'
-      ? 'Сервер долго не отвечает.\nПопробуй позже.'
+      ? 'Сервер не отвечает.\nНажми «Попробовать снова».'
       : 'Ошибка загрузки данных';
     showError(msg);
   }
@@ -669,6 +731,7 @@ function renderTxList(ops, elId) {
 
 function renderDonut(cats, total) {
   document.getElementById('donut-center-val').textContent = '₽'+(total/1000).toFixed(1)+'k';
+  if (typeof Chart === 'undefined') return; // Chart.js ещё не загружен
   if (donutChartInst) donutChartInst.destroy();
   donutChartInst = new Chart(document.getElementById('donutChart').getContext('2d'), {
     type:'doughnut',
@@ -678,6 +741,7 @@ function renderDonut(cats, total) {
 }
 
 function renderLineChart(ops, monthKey) {
+  if (typeof Chart === 'undefined') return; // Chart.js ещё не загружен
   const[y,m]=monthKey.split('-').map(Number);
   const days=new Date(y,m,0).getDate();
   const inc=new Array(days).fill(0), exp=new Array(days).fill(0);
@@ -698,6 +762,24 @@ function renderLineChart(ops, monthKey) {
 function forceRefresh() {
   try { localStorage.removeItem(CACHE_KEY); } catch(e) {}
   loadData();
+}
+
+// Дорисовываем графики когда Chart.js загрузится (если данные уже были в кэше)
+var chartjsEl = document.getElementById('chartjs-script');
+if (chartjsEl) {
+  chartjsEl.addEventListener('load', function() {
+    if (allData && currentView === 'dashboard') {
+      var month = document.getElementById('monthSelect').value;
+      var ops = allData.operations.filter(function(o) { return toYYYYMM(o.date) === month; });
+      var expOps = ops.filter(function(o) { return o.type === 'расход'; });
+      var catMap = {};
+      expOps.forEach(function(o) { var c = o.category || 'Прочее'; catMap[c] = (catMap[c] || 0) + Number(o.amount); });
+      var cats = Object.entries(catMap).sort(function(a,b) { return b[1]-a[1]; });
+      var total = expOps.reduce(function(s,o) { return s + Number(o.amount); }, 0);
+      renderDonut(cats, total);
+      renderLineChart(ops, month);
+    }
+  });
 }
 
 loadData();
