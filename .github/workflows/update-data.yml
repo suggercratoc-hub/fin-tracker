@@ -2,8 +2,11 @@ name: Update Finance Data
 
 on:
   schedule:
-    - cron: '*/15 * * * *'   # каждые 15 минут
-  workflow_dispatch:           # кнопка ручного запуска на GitHub
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   update:
@@ -14,7 +17,7 @@ jobs:
       - name: Fetch data from Apps Script
         run: |
           curl -L --max-time 30 \
-            "https://script.google.com/macros/s/AKfycbxxS_UCbeAF8E6anFDlFb_3bqw0zIeH1apd3hAj_ZmsiqNOVaZSsrtO4N4UzfjFbph7/exec" \
+            "https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec" \
             -o data.json
 
       - name: Validate JSON
