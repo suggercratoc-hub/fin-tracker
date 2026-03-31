@@ -7,7 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
 <script src="https://telegram.org/js/telegram-web-app.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
 <style>
   :root {
     --bg:        #121212;
@@ -188,7 +188,7 @@
 </head>
 <body>
 
-<div class="loading-overlay" id="loadingOverlay">
+<div class="loading-overlay" id="loadingOverlay" style="display:flex">
   <div class="spinner"></div>
   Загрузка данных...
 </div>
@@ -371,11 +371,14 @@
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec';
 
-if (window.Telegram && window.Telegram.WebApp) {
-  window.Telegram.WebApp.expand();
-  window.Telegram.WebApp.setHeaderColor('#121212');
-  window.Telegram.WebApp.setBackgroundColor('#121212');
-}
+try {
+  if (window.Telegram && window.Telegram.WebApp) {
+    const twa = window.Telegram.WebApp;
+    twa.expand();
+    if (twa.setHeaderColor) twa.setHeaderColor('#121212');
+    if (twa.setBackgroundColor) twa.setBackgroundColor('#121212');
+  }
+} catch(e) {}
 
 let lineChartInst = null, donutChartInst = null;
 let allData = null;
@@ -486,34 +489,51 @@ function applyData(data) {
   if (currentView !== 'dashboard') renderView(currentView);
 }
 
+function showOverlay(msg) {
+  const el = document.getElementById('loadingOverlay');
+  el.style.display = 'flex';
+  el.innerHTML = '<div class="spinner"></div>' + (msg || 'Загрузка...');
+}
+function hideOverlay() {
+  document.getElementById('loadingOverlay').style.display = 'none';
+}
+function showError(msg) {
+  hideOverlay();
+  document.getElementById('loadingOverlay').style.display = 'flex';
+  document.getElementById('loadingOverlay').innerHTML =
+    '<div style="text-align:center;padding:24px">' +
+    '<div style="font-size:32px;margin-bottom:12px">⚠️</div>' +
+    '<div style="color:#fff;font-size:15px;margin-bottom:8px">' + msg + '</div>' +
+    '<button onclick="forceRefresh()" style="margin-top:16px;background:#7e5bef;color:#fff;border:none;padding:10px 24px;border-radius:10px;font-size:14px;cursor:pointer">Попробовать снова</button>' +
+    '</div>';
+}
+
 async function loadData() {
   const cached = getCached();
   if (cached) {
+    hideOverlay();
     applyData(cached);
-    // refresh silently in background
-    document.getElementById('header-subtitle').textContent = 'Загрузка обновлений...';
+    // обновляем в фоне
     fetch(API_URL, { redirect: 'follow' })
       .then(r => r.json())
       .then(data => { setCache(data); applyData(data); })
-      .catch(() => {
-        document.getElementById('header-subtitle').textContent = 'Данные из кэша';
-      });
+      .catch(() => {});
     return;
   }
 
-  document.getElementById('loadingOverlay').classList.add('active');
-  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000));
+  showOverlay('Загрузка данных...');
+  const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000));
   try {
     const res = await Promise.race([fetch(API_URL, { redirect: 'follow' }), timeout]);
     const data = await res.json();
     setCache(data);
+    hideOverlay();
     applyData(data);
   } catch(e) {
-    const subtitle = e.message === 'timeout' ? 'Сервер не отвечает. Попробуйте обновить.' : 'Ошибка загрузки';
-    document.getElementById('header-subtitle').textContent = subtitle;
-    // show refresh button hint
-  } finally {
-    document.getElementById('loadingOverlay').classList.remove('active');
+    const msg = e.message === 'timeout'
+      ? 'Сервер долго не отвечает.\nПопробуй позже.'
+      : 'Ошибка загрузки данных';
+    showError(msg);
   }
 }
 
