@@ -201,7 +201,7 @@
   </div>
   <div class="mobile-header-right">
     <select id="monthSelectMobile" onchange="syncMonth('mobile')"></select>
-    <div class="mobile-refresh" onclick="loadData(true)"><i class="ri-refresh-line"></i></div>
+    <div class="mobile-refresh" onclick="loadData()"><i class="ri-refresh-line"></i></div>
   </div>
 </div>
 
@@ -244,7 +244,7 @@
     </div>
     <div class="header-right">
       <select class="month-selector" id="monthSelect" onchange="syncMonth('desktop')"></select>
-      <button class="btn-refresh" onclick="loadData(true)"><i class="ri-refresh-line"></i> Обновить</button>
+      <button class="btn-refresh" onclick="loadData()"><i class="ri-refresh-line"></i> Обновить</button>
     </div>
   </div>
 
@@ -369,64 +369,17 @@
 </main>
 
 <script>
-const API_URL = 'https://script.google.com/macros/s/AKfycbz9-7RMVloGT6wvLRxSA4o8sQ_VeFSa2oebqJUu4FDrYDGvwR5W3WZBMOU2oX2cAuOr/exec';
-const CACHE_KEY = 'fin_tracker_cache';
-const CACHE_DURATION = 5 * 60 * 1000; // 5 минут
+const API_URL = 'https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec';
+
+if (window.Telegram && window.Telegram.WebApp) {
+  window.Telegram.WebApp.expand();
+  window.Telegram.WebApp.setHeaderColor('#121212');
+  window.Telegram.WebApp.setBackgroundColor('#121212');
+}
 
 let lineChartInst = null, donutChartInst = null;
 let allData = null;
 let currentView = 'dashboard';
-let isLoading = false;
-
-// Кэширование
-function getCachedData() {
-  try {
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (!cached) return null;
-    const { data, timestamp } = JSON.parse(cached);
-    if (Date.now() - timestamp < CACHE_DURATION) {
-      return data;
-    }
-  } catch(e) {}
-  return null;
-}
-
-function setCachedData(data) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({
-      data: data,
-      timestamp: Date.now()
-    }));
-  } catch(e) {}
-}
-
-// Fallback данные
-function getFallbackData() {
-  const today = new Date();
-  const year = today.getFullYear();
-  const month = String(today.getMonth() + 1).padStart(2, '0');
-  return {
-    operations: [
-      { date: `${year}-${month}-${String(today.getDate()).padStart(2, '0')}`, type: 'доход', amount: 50000, category: 'Заказ', description: 'Аванс' },
-      { date: `${year}-${month}-${String(today.getDate() - 1).padStart(2, '0')}`, type: 'расход', amount: 3500, category: 'Еда', description: 'Продукты' },
-      { date: `${year}-${month}-${String(today.getDate() - 2).padStart(2, '0')}`, type: 'расход', amount: 2500, category: 'Бензин', description: 'Заправка' },
-      { date: `${year}-${month}-${String(today.getDate() - 3).padStart(2, '0')}`, type: 'расход', amount: 15000, category: 'Жильё', description: 'Коммуналка' },
-      { date: `${year}-${month}-${String(today.getDate() - 5).padStart(2, '0')}`, type: 'доход', amount: 15000, category: 'Прочий доход', description: 'Подработка' }
-    ],
-    debts: [
-      { status: 'активный', type: 'кредитка', creditor: 'Тинькофф', remaining: 15000, initial: 30000, paid: 15000 },
-      { status: 'активный', type: 'займ', creditor: 'Другу', remaining: 5000, initial: 10000, paid: 5000 }
-    ]
-  };
-}
-
-function showPlaceholders() {
-  document.getElementById('kpi-balance').textContent = '₽ —';
-  document.getElementById('kpi-income').textContent = '₽ —';
-  document.getElementById('kpi-expenses').textContent = '₽ —';
-  document.getElementById('kpi-debts').textContent = '₽ —';
-  document.getElementById('header-subtitle').textContent = 'Загрузка данных...';
-}
 
 const CAT_CONFIG = {
   'Материалы':        { icon:'ri-hammer-line',             color:'#3b82f6', grad:['#2563eb','#3b82f6'], cls:'work'   },
@@ -498,9 +451,8 @@ function switchView(view) {
 
 function renderView(view) {
   const month = document.getElementById('monthSelect').value;
-  if (!allData) return;
-  const ops = allData.operations ? allData.operations.filter(o => toYYYYMM(o.date) === month) : [];
-  const debts = allData.debts ? allData.debts.filter(d => d.status === 'активный') : [];
+  const ops = allData.operations.filter(o => toYYYYMM(o.date) === month);
+  const debts = allData.debts.filter(d => d.status === 'активный');
 
   if (view === 'income')     renderIncomeView(ops);
   if (view === 'expenses')   renderExpensesView(ops);
@@ -509,79 +461,23 @@ function renderView(view) {
 }
 
 // ── LOAD ──
-async function loadData(forceRefresh = false) {
-  if (isLoading) return;
-  isLoading = true;
-  
-  if (!forceRefresh) {
-    const cached = getCachedData();
-    if (cached) {
-      allData = cached;
-      populateMonthSelectors();
-      const month = document.getElementById('monthSelect').value || getCurrentMonth();
-      document.getElementById('monthSelect').value = month;
-      document.getElementById('monthSelectMobile').value = month;
-      renderDashboard(month);
-      document.getElementById('loadingOverlay').classList.remove('active');
-      // Фоновая загрузка свежих данных
-      setTimeout(() => loadData(true), 100);
-      isLoading = false;
-      return;
-    }
-  }
-  
+async function loadData() {
   document.getElementById('loadingOverlay').classList.add('active');
-
   try {
-    const url = API_URL + '?t=' + Date.now();
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Accept': 'application/json' },
-      signal: controller.signal
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) throw new Error('Ошибка ' + response.status);
-    
-    const data = await response.json();
-    allData = data;
-    setCachedData(data);
-
+    const res = await fetch(API_URL);
+    allData = await res.json();
     populateMonthSelectors();
-    const month = document.getElementById('monthSelect').value || getCurrentMonth();
-    document.getElementById('monthSelect').value = month;
-    document.getElementById('monthSelectMobile').value = month;
+    const month = document.getElementById('monthSelect').value;
     renderDashboard(month);
-
-  } catch (e) {
-    console.error(e);
-    document.getElementById('header-subtitle').textContent = 'Ошибка загрузки, показаны кэш-данные';
-    // Показываем fallback-данные если нет кэша
-    if (!allData) {
-      allData = getFallbackData();
-      renderDashboard(getCurrentMonth());
-    }
+  } catch(e) {
+    document.getElementById('header-subtitle').textContent = 'Ошибка загрузки';
   } finally {
     document.getElementById('loadingOverlay').classList.remove('active');
-    isLoading = false;
   }
-}
-
-function getCurrentMonth() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
 }
 
 function populateMonthSelectors() {
-  if (!allData || !allData.operations) return;
   const months = [...new Set(allData.operations.map(o=>toYYYYMM(o.date)).filter(Boolean))].sort().reverse();
-  if (months.length === 0) {
-    months.push(getCurrentMonth());
-  }
   ['monthSelect','monthSelectMobile'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
@@ -601,9 +497,8 @@ function syncMonth(from) {
 
 // ── DASHBOARD ──
 function renderDashboard(monthKey) {
-  if (!allData) return;
-  const ops = allData.operations ? allData.operations.filter(o => toYYYYMM(o.date) === monthKey) : [];
-  const debts = allData.debts ? allData.debts.filter(d => d.status === 'активный') : [];
+  const ops = allData.operations.filter(o => toYYYYMM(o.date) === monthKey);
+  const debts = allData.debts.filter(d => d.status === 'активный');
   const incOps = ops.filter(o => o.type==='доход');
   const expOps = ops.filter(o => o.type==='расход');
   const totalInc = incOps.reduce((s,o)=>s+Number(o.amount),0);
@@ -626,8 +521,8 @@ function renderDashboard(monthKey) {
   const cats = Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
 
   renderCategoryBars(cats, totalExp);
-  setTimeout(() => renderDonut(cats, totalExp), 10);
-  setTimeout(() => renderLineChart(ops, monthKey), 10);
+  renderDonut(cats, totalExp);
+  renderLineChart(ops, monthKey);
   renderDebtList(debts, totalDebt, 'debt-list-dash', 'debt-total-dash');
   renderTxList([...ops].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,10), 'tx-list-dash');
 }
@@ -680,7 +575,6 @@ function renderCategoryBars(cats, total) { renderCatBarsInto(cats, total, 'categ
 
 function renderCatBarsInto(cats, total, elId, totalColor) {
   const el = document.getElementById(elId);
-  if (!el) return;
   if (!cats.length) { el.innerHTML='<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Нет данных</div>'; return; }
   const maxVal = cats[0][1];
   let html = cats.map(([name,val])=>{
@@ -692,9 +586,8 @@ function renderCatBarsInto(cats, total, elId, totalColor) {
 }
 
 function renderDebtList(debts, total, listId, totalId) {
-  if (totalId && document.getElementById(totalId)) document.getElementById(totalId).textContent = fmt(total);
+  if (totalId) document.getElementById(totalId).textContent = fmt(total);
   const el = document.getElementById(listId);
-  if (!el) return;
   if (!debts.length) { el.innerHTML='<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Нет активных долгов</div>'; return; }
   el.innerHTML = debts.map(d=>{
     const cfg=DEBT_ICONS[d.type]||DEBT_ICONS['прочее'];
@@ -706,7 +599,6 @@ function renderDebtList(debts, total, listId, totalId) {
 
 function renderTxList(ops, elId) {
   const el = document.getElementById(elId);
-  if (!el) return;
   if (!ops.length) { el.innerHTML='<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Нет операций</div>'; return; }
   el.innerHTML = ops.map(o=>{
     const isInc=o.type==='доход', cfg=getCat(o.category);
@@ -715,20 +607,16 @@ function renderTxList(ops, elId) {
 }
 
 function renderDonut(cats, total) {
-  const ctx = document.getElementById('donutChart');
-  if (!ctx) return;
   document.getElementById('donut-center-val').textContent = '₽'+(total/1000).toFixed(1)+'k';
   if (donutChartInst) donutChartInst.destroy();
-  donutChartInst = new Chart(ctx.getContext('2d'), {
+  donutChartInst = new Chart(document.getElementById('donutChart').getContext('2d'), {
     type:'doughnut',
     data:{ labels:cats.map(c=>c[0]), datasets:[{ data:cats.map(c=>c[1]), backgroundColor:cats.map((_,i)=>DONUT_COLORS[i%DONUT_COLORS.length]), borderColor:'#1e1e1e', borderWidth:4, hoverOffset:10, borderRadius:4 }] },
-    options:{ cutout:'68%', responsive:true, maintainAspectRatio:true, plugins:{ legend:{ position:'bottom', labels:{ color:'#b3b3b3', boxWidth:10, boxHeight:10, borderRadius:3, useBorderRadius:true, font:{size:12,family:'Rubik'}, padding:14 } }, tooltip:{ backgroundColor:'#1e1e1e', borderColor:'#2a2a2a', borderWidth:1, titleColor:'#fff', bodyColor:'#b3b3b3', padding:12, callbacks:{ label:ctx=>{ const p=total?Math.round(ctx.raw/total*100):0; return ` ₽ ${ctx.raw.toLocaleString('ru')}  (${p}%)`; } } } } }
+    options:{ cutout:'68%', responsive:true, plugins:{ legend:{ position:'bottom', labels:{ color:'#b3b3b3', boxWidth:10, boxHeight:10, borderRadius:3, useBorderRadius:true, font:{size:12,family:'Rubik'}, padding:14 } }, tooltip:{ backgroundColor:'#1e1e1e', borderColor:'#2a2a2a', borderWidth:1, titleColor:'#fff', bodyColor:'#b3b3b3', padding:12, callbacks:{ label:ctx=>{ const p=total?Math.round(ctx.raw/total*100):0; return ` ₽ ${ctx.raw.toLocaleString('ru')}  (${p}%)`; } } } } }
   });
 }
 
 function renderLineChart(ops, monthKey) {
-  const ctx = document.getElementById('lineChart');
-  if (!ctx) return;
   const[y,m]=monthKey.split('-').map(Number);
   const days=new Date(y,m,0).getDate();
   const inc=new Array(days).fill(0), exp=new Array(days).fill(0);
@@ -736,28 +624,17 @@ function renderLineChart(ops, monthKey) {
   let ci=0,ce=0;
   const icm=inc.map(v=>ci+=v), ecm=exp.map(v=>ce+=v);
   if(lineChartInst) lineChartInst.destroy();
-  lineChartInst = new Chart(ctx.getContext('2d'),{
+  lineChartInst = new Chart(document.getElementById('lineChart').getContext('2d'),{
     type:'line',
     data:{ labels:Array.from({length:days},(_,i)=>i+1), datasets:[
       {label:'Доходы',data:icm,borderColor:'#00c49a',backgroundColor:'rgba(0,196,154,0.1)',borderWidth:2.5,pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:'#00c49a',tension:0.45,fill:true},
       {label:'Расходы',data:ecm,borderColor:'#ff4d4f',backgroundColor:'rgba(255,77,79,0.07)',borderWidth:2.5,pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:'#ff4d4f',tension:0.45,fill:true}
     ]},
-    options:{ responsive:true, maintainAspectRatio:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:{labels:{color:'#b3b3b3',boxWidth:10,boxHeight:10,borderRadius:3,useBorderRadius:true,font:{size:12,family:'Rubik'}}}, tooltip:{backgroundColor:'#1e1e1e',borderColor:'#2a2a2a',borderWidth:1,titleColor:'#fff',bodyColor:'#b3b3b3',padding:12,callbacks:{title:i=>`День ${i[0].label}`,label:ctx=>` ${ctx.dataset.label}: ₽ ${ctx.raw.toLocaleString('ru')}`}} }, scales:{ x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#5a5a5a',font:{size:11,family:'Rubik'},maxTicksLimit:8}}, y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#5a5a5a',font:{size:11,family:'Rubik'},callback:v=>'₽'+(v/1000).toFixed(0)+'k'}} } }
+    options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:{labels:{color:'#b3b3b3',boxWidth:10,boxHeight:10,borderRadius:3,useBorderRadius:true,font:{size:12,family:'Rubik'}}}, tooltip:{backgroundColor:'#1e1e1e',borderColor:'#2a2a2a',borderWidth:1,titleColor:'#fff',bodyColor:'#b3b3b3',padding:12,callbacks:{title:i=>`День ${i[0].label}`,label:ctx=>` ${ctx.dataset.label}: ₽ ${ctx.raw.toLocaleString('ru')}`}} }, scales:{ x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#5a5a5a',font:{size:11,family:'Rubik'},maxTicksLimit:8}}, y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#5a5a5a',font:{size:11,family:'Rubik'},callback:v=>'₽'+(v/1000).toFixed(0)+'k'}} } }
   });
 }
 
-document.addEventListener("DOMContentLoaded", function () {
-  showPlaceholders();
-
-  if (window.Telegram && window.Telegram.WebApp) {
-    window.Telegram.WebApp.ready();
-    window.Telegram.WebApp.expand();
-    window.Telegram.WebApp.setHeaderColor('#121212');
-    window.Telegram.WebApp.setBackgroundColor('#121212');
-  }
-
-  setTimeout(() => loadData(false), 50);
-});
+loadData();
 </script>
 </body>
 </html>
