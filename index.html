@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ФинТрекер — Дашборд</title>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --bg:        #121212;
+    --bg2:       #1e1e1e;
+    --bg3:       #252525;
+    --border:    #2a2a2a;
+    --text1:     #ffffff;
+    --text2:     #b3b3b3;
+    --text3:     #5a5a5a;
+    --purple:    #7e5bef;
+    --purple-l:  #a78bfa;
+    --teal:      #00c49a;
+    --teal-d:    #00997a;
+    --red:       #ff4d4f;
+    --yellow:    #ffbb33;
+    --blue:      #3b82f6;
+    --shadow:    0 4px 24px rgba(0,0,0,0.35);
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text1);
+    font-family: 'Rubik', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── SIDEBAR ── */
+  .sidebar {
+    position: fixed;
+    left:0; top:0; bottom:0;
+    width: 230px;
+    background: var(--bg2);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 28px 0;
+    z-index: 100;
+  }
+
+  .logo {
+    padding: 0 24px 36px;
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text1);
+    letter-spacing: -0.3px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: linear-gradient(135deg, var(--purple), var(--teal));
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    color: #fff;
+  }
+
+  .nav-section {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text3);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 0 24px 8px;
+    margin-top: 8px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 11px 24px;
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.18s;
+    font-size: 14px;
+    font-weight: 500;
+    border-left: 3px solid transparent;
+    margin: 1px 0;
+  }
+
+  .nav-item i { font-size: 18px; width: 20px; text-align: center; }
+  .nav-item:hover { color: var(--text1); background: var(--bg3); }
+  .nav-item.active {
+    color: var(--purple-l);
+    border-left-color: var(--purple);
+    background: rgba(126,91,239,0.1);
+  }
+
+  .nav-bottom { margin-top: auto; }
+
+  /* ── MAIN ── */
+  .main {
+    margin-left: 230px;
+    padding: 32px 36px;
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 28px;
+  }
+
+  .header h1 { font-size: 22px; font-weight: 700; color: var(--text1); }
+  .header p  { font-size: 13px; color: var(--text3); margin-top: 3px; }
+
+  .header-right { display: flex; align-items: center; gap: 12px; }
+
+  .month-selector {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--text1);
+    padding: 9px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-family: 'Rubik', sans-serif;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .btn-refresh {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    padding: 9px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    font-family: 'Rubik', sans-serif;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+    transition: color 0.2s;
+  }
+  .btn-refresh:hover { color: var(--text1); }
+
+  /* ── KPI CARDS ── */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .kpi-card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: var(--shadow);
+  }
+
+  .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 8px 32px rgba(0,0,0,0.45); }
+
+  .kpi-card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .kpi-card.c-purple::after { background: linear-gradient(90deg, var(--purple), var(--purple-l)); }
+  .kpi-card.c-teal::after   { background: linear-gradient(90deg, var(--teal-d), var(--teal)); }
+  .kpi-card.c-red::after    { background: linear-gradient(90deg, #c0392b, var(--red)); }
+  .kpi-card.c-yellow::after { background: linear-gradient(90deg, #e67e22, var(--yellow)); }
+
+  .kpi-icon-box {
+    width: 42px; height: 42px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+
+  .kpi-icon-box.purple { background: rgba(126,91,239,0.15); color: var(--purple-l); }
+  .kpi-icon-box.teal   { background: rgba(0,196,154,0.12);  color: var(--teal); }
+  .kpi-icon-box.red    { background: rgba(255,77,79,0.12);   color: var(--red); }
+  .kpi-icon-box.yellow { background: rgba(255,187,51,0.12);  color: var(--yellow); }
+
+  .kpi-label {
+    font-size: 12px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 6px;
+    font-weight: 500;
+  }
+
+  .kpi-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: var(--text1);
+    letter-spacing: -0.5px;
+    margin-bottom: 8px;
+  }
+
+  .kpi-sub { font-size: 12px; color: var(--text3); display: flex; align-items: center; gap: 6px; }
+
+  /* ── LAYOUT ── */
+  .grid-2 {
+    display: grid;
+    grid-template-columns: 1.55fr 1fr;
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+  }
+
+  /* ── CARD ── */
+  .card {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: var(--shadow);
+  }
+
+  .card-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* ── DONUT ── */
+  .donut-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 240px;
+    margin: 0 auto 8px;
+  }
+
+  .donut-center {
+    position: absolute;
+    top: 50%; left: 50%;
+    transform: translate(-50%, -58%);
+    text-align: center;
+    pointer-events: none;
+  }
+
+  .donut-center-val {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text1);
+    line-height: 1;
+  }
+
+  .donut-center-lbl {
+    font-size: 10px;
+    color: var(--text3);
+    margin-top: 3px;
+  }
+
+  /* ── CATEGORY BARS ── */
+  .cat-item { margin-bottom: 14px; }
+
+  .cat-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    margin-bottom: 7px;
+    align-items: center;
+  }
+
+  .cat-name-wrap { display: flex; align-items: center; gap: 8px; color: var(--text1); font-weight: 500; }
+  .cat-name-wrap i { font-size: 15px; }
+  .cat-val { color: var(--text2); font-size: 13px; font-weight: 600; }
+
+  .cat-bar-wrap {
+    background: var(--bg3);
+    border-radius: 6px;
+    height: 7px;
+    overflow: hidden;
+  }
+
+  .cat-bar {
+    height: 7px;
+    border-radius: 6px;
+    transition: width 0.6s ease;
+  }
+
+  .total-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 0 0;
+    border-top: 1px solid var(--border);
+    margin-top: 10px;
+  }
+
+  .total-label { font-size: 13px; color: var(--text3); }
+  .total-val { font-size: 18px; font-weight: 700; color: var(--red); }
+
+  /* ── DEBTS ── */
+  .debt-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .debt-item:last-of-type { border-bottom: none; }
+
+  .debt-icon-box {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+    background: rgba(255,77,79,0.1);
+    color: var(--red);
+  }
+
+  .debt-info { flex: 1; min-width: 0; }
+  .debt-name { font-size: 14px; color: var(--text1); font-weight: 500; margin-bottom: 6px; }
+
+  .debt-bar-wrap { background: var(--bg3); border-radius: 6px; height: 5px; }
+  .debt-bar { height: 5px; border-radius: 6px; }
+
+  .debt-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--text3); margin-top: 4px; }
+  .debt-amount { font-size: 15px; font-weight: 700; color: var(--red); white-space: nowrap; }
+
+  /* ── TRANSACTIONS ── */
+  .tx-item {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 11px 0;
+    border-bottom: 1px solid var(--border);
+    transition: background 0.15s;
+  }
+
+  .tx-item:last-child { border-bottom: none; }
+  .tx-item:hover { background: var(--bg3); margin: 0 -8px; padding: 11px 8px; border-radius: 10px; }
+
+  .tx-icon {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  .tx-icon.food   { background: rgba(0,196,154,0.1);  color: var(--teal); }
+  .tx-icon.fuel   { background: rgba(255,187,51,0.1); color: var(--yellow); }
+  .tx-icon.work   { background: rgba(59,130,246,0.1); color: var(--blue); }
+  .tx-icon.income { background: rgba(126,91,239,0.1); color: var(--purple-l); }
+  .tx-icon.home   { background: rgba(167,139,250,0.1); color: var(--purple-l); }
+  .tx-icon.other  { background: rgba(90,90,90,0.15); color: var(--text3); }
+
+  .tx-info { flex: 1; min-width: 0; }
+  .tx-name { font-size: 14px; color: var(--text1); font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tx-date { font-size: 12px; color: var(--text3); margin-top: 2px; }
+
+  .tx-amount { font-size: 15px; font-weight: 700; white-space: nowrap; }
+  .tx-amount.minus { color: var(--red); }
+  .tx-amount.plus  { color: var(--teal); }
+
+  /* ── SCROLLABLE ── */
+  .scrollable { max-height: 290px; overflow-y: auto; padding-right: 4px; }
+  .scrollable::-webkit-scrollbar { width: 3px; }
+  .scrollable::-webkit-scrollbar-track { background: transparent; }
+  .scrollable::-webkit-scrollbar-thumb { background: var(--bg3); border-radius: 4px; }
+
+  /* ── DIVIDER ── */
+  .divider { height: 1px; background: var(--border); margin: 16px 0; }
+
+  /* ── LOADING ── */
+  .loading-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(18,18,18,0.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    font-size: 14px;
+    color: var(--text2);
+  }
+  .loading-overlay.active { display: flex; }
+  .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--purple);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  Загрузка данных...
+</div>
+
+<!-- SIDEBAR -->
+<nav class="sidebar">
+  <div class="logo">
+    <div class="logo-icon"><i class="ri-bar-chart-2-line"></i></div>
+    ФинТрекер
+  </div>
+
+  <div class="nav-section">Главное</div>
+  <div class="nav-item active"><i class="ri-dashboard-line"></i> Дашборд</div>
+  <div class="nav-item"><i class="ri-arrow-up-circle-line"></i> Доходы</div>
+  <div class="nav-item"><i class="ri-arrow-down-circle-line"></i> Расходы</div>
+
+  <div class="nav-section" style="margin-top:12px">Управление</div>
+  <div class="nav-item"><i class="ri-bank-card-line"></i> Долги</div>
+  <div class="nav-item"><i class="ri-exchange-line"></i> Транзакции</div>
+  <div class="nav-item"><i class="ri-folder-line"></i> Категории</div>
+
+  <div class="nav-bottom">
+    <div class="nav-item"><i class="ri-settings-3-line"></i> Настройки</div>
+  </div>
+</nav>
+
+<!-- MAIN -->
+<main class="main">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div>
+      <h1>Обзор финансов</h1>
+      <p id="header-subtitle">Загрузка...</p>
+    </div>
+    <div class="header-right">
+      <select class="month-selector" id="monthSelect" onchange="onMonthChange()"></select>
+      <button class="btn-refresh" onclick="loadData()"><i class="ri-refresh-line"></i> Обновить</button>
+    </div>
+  </div>
+
+  <!-- KPI CARDS -->
+  <div class="kpi-grid">
+    <div class="kpi-card c-teal">
+      <div class="kpi-icon-box teal"><i class="ri-wallet-3-line"></i></div>
+      <div class="kpi-label">Свободные деньги</div>
+      <div class="kpi-value" id="kpi-balance">—</div>
+      <div class="kpi-sub" id="kpi-balance-sub">доходы − расходы</div>
+    </div>
+    <div class="kpi-card c-purple">
+      <div class="kpi-icon-box purple"><i class="ri-line-chart-line"></i></div>
+      <div class="kpi-label">Доходы за месяц</div>
+      <div class="kpi-value" id="kpi-income">—</div>
+      <div class="kpi-sub" id="kpi-income-sub">операций</div>
+    </div>
+    <div class="kpi-card c-red">
+      <div class="kpi-icon-box red"><i class="ri-shopping-bag-line"></i></div>
+      <div class="kpi-label">Расходы за месяц</div>
+      <div class="kpi-value" id="kpi-expenses">—</div>
+      <div class="kpi-sub" id="kpi-expenses-sub">операций</div>
+    </div>
+    <div class="kpi-card c-yellow">
+      <div class="kpi-icon-box yellow"><i class="ri-bank-line"></i></div>
+      <div class="kpi-label">Долги</div>
+      <div class="kpi-value" id="kpi-debts">—</div>
+      <div class="kpi-sub" id="kpi-debts-sub">кредиторов</div>
+    </div>
+  </div>
+
+  <!-- LINE + DONUT -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">
+        Движение денег
+        <span style="font-size:12px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0" id="chart-period">текущий месяц</span>
+      </div>
+      <canvas id="lineChart" height="148"></canvas>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Расходы по категориям</div>
+      <div class="donut-wrap">
+        <canvas id="donutChart"></canvas>
+        <div class="donut-center">
+          <div class="donut-center-val" id="donut-center-val">—</div>
+          <div class="donut-center-lbl">итого</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BARS + DEBTS + TX -->
+  <div class="grid-3">
+
+    <!-- CATEGORY BARS -->
+    <div class="card">
+      <div class="card-title">По категориям</div>
+      <div id="category-bars">
+        <div style="color:var(--text3);font-size:13px;padding:20px 0 10px;text-align:center">Загрузка...</div>
+      </div>
+    </div>
+
+    <!-- DEBTS -->
+    <div class="card">
+      <div class="card-title">
+        Долги
+      </div>
+      <div id="debt-list">
+        <div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Загрузка...</div>
+      </div>
+      <div class="total-row">
+        <span class="total-label">Общий долг</span>
+        <span class="total-val" id="debt-total">—</span>
+      </div>
+    </div>
+
+    <!-- TRANSACTIONS -->
+    <div class="card">
+      <div class="card-title">
+        Последние операции
+      </div>
+      <div class="scrollable" id="transactions-list">
+        <div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Загрузка...</div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+const API_URL = 'https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec';
+
+let lineChartInst = null;
+let donutChartInst = null;
+let allData = null;
+
+// ── CATEGORY CONFIG ──
+const CAT_CONFIG = {
+  'Материалы':        { icon: 'ri-hammer-line',        color: '#3b82f6', grad: ['#2563eb','#3b82f6'], cls: 'work' },
+  'Бензин':           { icon: 'ri-gas-station-line',    color: '#ffbb33', grad: ['#e67e22','#ffbb33'], cls: 'fuel' },
+  'Еда':              { icon: 'ri-restaurant-line',     color: '#00c49a', grad: ['#00997a','#00c49a'], cls: 'food' },
+  'Жильё':            { icon: 'ri-home-4-line',         color: '#a78bfa', grad: ['#7e5bef','#a78bfa'], cls: 'home' },
+  'Транспорт':        { icon: 'ri-bus-line',            color: '#f97316', grad: ['#c2410c','#f97316'], cls: 'other' },
+  'Транспорт рабочий':{ icon: 'ri-truck-line',          color: '#fb923c', grad: ['#ea580c','#fb923c'], cls: 'other' },
+  'Инструмент':       { icon: 'ri-tools-line',          color: '#60a5fa', grad: ['#2563eb','#60a5fa'], cls: 'work' },
+  'Расходники':       { icon: 'ri-scissors-line',       color: '#94a3b8', grad: ['#64748b','#94a3b8'], cls: 'work' },
+  'Здоровье':         { icon: 'ri-heart-pulse-line',    color: '#ec4899', grad: ['#be185d','#ec4899'], cls: 'other' },
+  'Одежда':           { icon: 'ri-t-shirt-line',        color: '#8b5cf6', grad: ['#6d28d9','#8b5cf6'], cls: 'other' },
+  'Развлечения':      { icon: 'ri-gamepad-line',        color: '#06b6d4', grad: ['#0e7490','#06b6d4'], cls: 'other' },
+  'Заказ':            { icon: 'ri-briefcase-line',      color: '#00c49a', grad: ['#00997a','#00c49a'], cls: 'income' },
+  'Прочий доход':     { icon: 'ri-money-dollar-circle-line', color: '#7e5bef', grad: ['#6d28d9','#7e5bef'], cls: 'income' },
+  'Прочее':           { icon: 'ri-more-line',           color: '#5a5a5a', grad: ['#3a3a3a','#5a5a5a'], cls: 'other' },
+};
+
+function getCat(name) {
+  return CAT_CONFIG[name] || { icon: 'ri-price-tag-3-line', color: '#5a5a5a', grad: ['#3a3a3a','#5a5a5a'], cls: 'other' };
+}
+
+// ── DATE HELPERS ──
+function parseDate(raw) {
+  if (!raw) return null;
+  if (raw instanceof Date) return raw;
+  // "2026-03-31"
+  if (typeof raw === 'string' && raw.includes('-')) return new Date(raw);
+  // "31.03.2026"
+  if (typeof raw === 'string' && raw.includes('.')) {
+    const [d, m, y] = raw.split('.');
+    return new Date(y, m - 1, d);
+  }
+  return new Date(raw);
+}
+
+function toYYYYMM(dateStr) {
+  if (!dateStr) return '';
+  return dateStr.substring(0, 7); // "2026-03"
+}
+
+function formatRu(amount) {
+  return '₽ ' + Math.round(amount).toLocaleString('ru');
+}
+
+function monthLabel(yyyymm) {
+  if (!yyyymm) return '';
+  const [y, m] = yyyymm.split('-');
+  const months = ['Январь','Февраль','Март','Апрель','Май','Июнь',
+                  'Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь'];
+  return months[parseInt(m) - 1] + ' ' + y;
+}
+
+function formatDayRu(dateStr) {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  return parseInt(d) + ' ' + months[parseInt(m) - 1];
+}
+
+// ── LOAD DATA ──
+async function loadData() {
+  document.getElementById('loadingOverlay').classList.add('active');
+  try {
+    const res = await fetch(API_URL);
+    allData = await res.json();
+    populateMonthSelector();
+    const month = document.getElementById('monthSelect').value;
+    renderDashboard(month);
+  } catch(e) {
+    document.getElementById('header-subtitle').textContent = 'Ошибка загрузки данных';
+    console.error(e);
+  } finally {
+    document.getElementById('loadingOverlay').classList.remove('active');
+  }
+}
+
+function onMonthChange() {
+  if (!allData) return;
+  renderDashboard(document.getElementById('monthSelect').value);
+}
+
+function populateMonthSelector() {
+  const months = [...new Set(
+    allData.operations
+      .map(o => toYYYYMM(o.date))
+      .filter(Boolean)
+  )].sort().reverse();
+
+  const sel = document.getElementById('monthSelect');
+  sel.innerHTML = '';
+  months.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = monthLabel(m);
+    sel.appendChild(opt);
+  });
+}
+
+// ── RENDER DASHBOARD ──
+function renderDashboard(monthKey) {
+  const ops = allData.operations.filter(o => toYYYYMM(o.date) === monthKey);
+  const activeDebts = allData.debts.filter(d => d.status === 'активный');
+
+  const incomeOps   = ops.filter(o => o.type === 'доход');
+  const expenseOps  = ops.filter(o => o.type === 'расход');
+  const totalIncome  = incomeOps.reduce((s, o) => s + Number(o.amount), 0);
+  const totalExpenses = expenseOps.reduce((s, o) => s + Number(o.amount), 0);
+  const balance = totalIncome - totalExpenses;
+  const totalDebt = activeDebts.reduce((s, d) => s + Number(d.remaining), 0);
+
+  // KPI
+  document.getElementById('kpi-balance').textContent   = formatRu(balance);
+  document.getElementById('kpi-income').textContent    = formatRu(totalIncome);
+  document.getElementById('kpi-expenses').textContent  = formatRu(totalExpenses);
+  document.getElementById('kpi-debts').textContent     = formatRu(totalDebt);
+  document.getElementById('kpi-income-sub').textContent  = incomeOps.length + ' операций';
+  document.getElementById('kpi-expenses-sub').textContent = expenseOps.length + ' операций';
+  document.getElementById('kpi-debts-sub').textContent   = activeDebts.length + ' кредитора';
+  document.getElementById('kpi-balance-sub').textContent = balance >= 0 ? 'доходы превышают расходы' : 'расходы превышают доходы';
+
+  document.getElementById('header-subtitle').textContent =
+    'Обновлено только что · ' + monthLabel(monthKey);
+  document.getElementById('chart-period').textContent = monthLabel(monthKey);
+
+  // Categories
+  const catMap = {};
+  expenseOps.forEach(o => {
+    const cat = o.category || 'Прочее';
+    catMap[cat] = (catMap[cat] || 0) + Number(o.amount);
+  });
+  const cats = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+
+  renderCategoryBars(cats, totalExpenses);
+  renderDonut(cats, totalExpenses);
+  renderLineChart(ops, monthKey);
+  renderDebts(activeDebts, totalDebt);
+
+  const sorted = [...ops].sort((a, b) => (b.date || '').localeCompare(a.date || '')).slice(0, 10);
+  renderTransactions(sorted);
+}
+
+// ── CATEGORY BARS ──
+function renderCategoryBars(cats, total) {
+  const el = document.getElementById('category-bars');
+  if (!cats.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Нет данных</div>';
+    return;
+  }
+  const maxVal = cats[0][1];
+  let html = cats.slice(0, 6).map(([name, val]) => {
+    const cfg = getCat(name);
+    const pct = Math.round(val / maxVal * 100);
+    return `
+      <div class="cat-item">
+        <div class="cat-header">
+          <span class="cat-name-wrap"><i class="${cfg.icon}" style="color:${cfg.color}"></i> ${name}</span>
+          <span class="cat-val">${formatRu(val)}</span>
+        </div>
+        <div class="cat-bar-wrap">
+          <div class="cat-bar" style="width:${pct}%;background:linear-gradient(90deg,${cfg.grad[0]},${cfg.grad[1]})"></div>
+        </div>
+      </div>`;
+  }).join('');
+  html += `
+    <div class="total-row">
+      <span class="total-label">Итого расходов</span>
+      <span class="total-val">${formatRu(total)}</span>
+    </div>`;
+  el.innerHTML = html;
+}
+
+// ── DONUT CHART ──
+const DONUT_COLORS = ['#3b82f6','#ffbb33','#00c49a','#7e5bef','#f97316','#ec4899','#5a5a5a'];
+
+function renderDonut(cats, total) {
+  document.getElementById('donut-center-val').textContent =
+    '₽' + (total / 1000).toFixed(1) + 'k';
+
+  const labels = cats.map(c => c[0]);
+  const data   = cats.map(c => c[1]);
+  const colors = cats.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]);
+
+  if (donutChartInst) donutChartInst.destroy();
+  donutChartInst = new Chart(document.getElementById('donutChart').getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: colors,
+        borderColor: '#1e1e1e',
+        borderWidth: 4,
+        hoverOffset: 10,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      cutout: '68%',
+      responsive: true,
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: '#b3b3b3',
+            boxWidth: 10, boxHeight: 10,
+            borderRadius: 3, useBorderRadius: true,
+            font: { size: 12, family: 'Rubik' },
+            padding: 14
+          }
+        },
+        tooltip: {
+          backgroundColor: '#1e1e1e',
+          borderColor: '#2a2a2a', borderWidth: 1,
+          titleColor: '#fff', bodyColor: '#b3b3b3', padding: 12,
+          callbacks: {
+            label: ctx => {
+              const pct = total ? Math.round(ctx.raw / total * 100) : 0;
+              return ` ₽ ${ctx.raw.toLocaleString('ru')}  (${pct}%)`;
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+// ── LINE CHART ──
+function renderLineChart(ops, monthKey) {
+  const [y, m] = monthKey.split('-').map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+
+  const incByDay = new Array(daysInMonth).fill(0);
+  const expByDay = new Array(daysInMonth).fill(0);
+
+  ops.forEach(o => {
+    const d = parseDate(o.date);
+    if (!d) return;
+    const dayIdx = d.getDate() - 1;
+    if (dayIdx < 0 || dayIdx >= daysInMonth) return;
+    if (o.type === 'доход')   incByDay[dayIdx] += Number(o.amount);
+    if (o.type === 'расход')  expByDay[dayIdx] += Number(o.amount);
+  });
+
+  let ci = 0, ce = 0;
+  const incCum = incByDay.map(v => (ci += v));
+  const expCum = expByDay.map(v => (ce += v));
+
+  if (lineChartInst) lineChartInst.destroy();
+  lineChartInst = new Chart(document.getElementById('lineChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: days,
+      datasets: [
+        {
+          label: 'Доходы',
+          data: incCum,
+          borderColor: '#00c49a',
+          backgroundColor: 'rgba(0,196,154,0.1)',
+          borderWidth: 2.5,
+          pointRadius: 0, pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#00c49a',
+          tension: 0.45, fill: true,
+        },
+        {
+          label: 'Расходы',
+          data: expCum,
+          borderColor: '#ff4d4f',
+          backgroundColor: 'rgba(255,77,79,0.07)',
+          borderWidth: 2.5,
+          pointRadius: 0, pointHoverRadius: 5,
+          pointHoverBackgroundColor: '#ff4d4f',
+          tension: 0.45, fill: true,
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          labels: {
+            color: '#b3b3b3', boxWidth: 10, boxHeight: 10,
+            borderRadius: 3, useBorderRadius: true,
+            font: { size: 12, family: 'Rubik' }
+          }
+        },
+        tooltip: {
+          backgroundColor: '#1e1e1e', borderColor: '#2a2a2a', borderWidth: 1,
+          titleColor: '#ffffff', bodyColor: '#b3b3b3', padding: 12,
+          callbacks: {
+            title: items => `День ${items[0].label}`,
+            label: ctx => ` ${ctx.dataset.label}: ₽ ${ctx.raw.toLocaleString('ru')}`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: { color: '#5a5a5a', font: { size: 11, family: 'Rubik' }, maxTicksLimit: 8 }
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.04)' },
+          ticks: {
+            color: '#5a5a5a', font: { size: 11, family: 'Rubik' },
+            callback: v => '₽' + (v / 1000).toFixed(0) + 'k'
+          }
+        }
+      }
+    }
+  });
+}
+
+// ── DEBTS ──
+const DEBT_ICONS = {
+  'кредитка':   { icon: 'ri-bank-card-line',   color: 'rgba(255,77,79,0.1)',    textColor: 'var(--red)' },
+  'поставщик':  { icon: 'ri-building-2-line',  color: 'rgba(255,187,51,0.1)',   textColor: '#ffbb33' },
+  'займ':       { icon: 'ri-hand-coin-line',   color: 'rgba(126,91,239,0.1)',   textColor: 'var(--purple-l)' },
+  'прочее':     { icon: 'ri-file-list-3-line', color: 'rgba(90,90,90,0.15)',    textColor: 'var(--text3)' },
+};
+
+function renderDebts(debts, total) {
+  const el = document.getElementById('debt-list');
+  document.getElementById('debt-total').textContent = formatRu(total);
+
+  if (!debts.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Нет активных долгов</div>';
+    return;
+  }
+
+  el.innerHTML = debts.map(d => {
+    const cfg = DEBT_ICONS[d.type] || DEBT_ICONS['прочее'];
+    const pct = d.initial > 0 ? Math.round(d.paid / d.initial * 100) : 0;
+    const barColor = cfg.textColor === 'var(--red)'
+      ? 'linear-gradient(90deg,#c0392b,#ff4d4f)'
+      : 'linear-gradient(90deg,#e67e22,#ffbb33)';
+    return `
+      <div class="debt-item">
+        <div class="debt-icon-box" style="background:${cfg.color};color:${cfg.textColor}">
+          <i class="${cfg.icon}"></i>
+        </div>
+        <div class="debt-info">
+          <div class="debt-name">${d.creditor}</div>
+          <div class="debt-bar-wrap">
+            <div class="debt-bar" style="width:${pct}%;background:${barColor}"></div>
+          </div>
+          <div class="debt-meta">
+            <span>Погашено ${pct}%</span>
+            <span>было ${formatRu(d.initial)}</span>
+          </div>
+        </div>
+        <div class="debt-amount" style="color:${cfg.textColor}">${formatRu(d.remaining)}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── TRANSACTIONS ──
+function renderTransactions(ops) {
+  const el = document.getElementById('transactions-list');
+  if (!ops.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Нет операций</div>';
+    return;
+  }
+
+  el.innerHTML = ops.map(o => {
+    const isIncome = o.type === 'доход';
+    const cfg = getCat(o.category);
+    const iconClass = isIncome ? 'income' : cfg.cls;
+    const icon = isIncome ? 'ri-arrow-down-line' : cfg.icon;
+    const amountClass = isIncome ? 'plus' : 'minus';
+    const sign = isIncome ? '+' : '−';
+    const dateStr = formatDayRu(o.date);
+    return `
+      <div class="tx-item">
+        <div class="tx-icon ${iconClass}"><i class="${icon}"></i></div>
+        <div class="tx-info">
+          <div class="tx-name">${o.description || o.category || '—'}</div>
+          <div class="tx-date">${dateStr} · ${o.category || o.group || ''}</div>
+        </div>
+        <div class="tx-amount ${amountClass}">${sign}₽ ${Number(o.amount).toLocaleString('ru')}</div>
+      </div>`;
+  }).join('');
+}
+
+// ── INIT ──
+loadData();
+</script>
+</body>
+</html>
