@@ -6,7 +6,7 @@
 <title>ФинТрекер — Дашборд</title>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
- <script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   :root {
@@ -417,6 +417,144 @@
     animation: spin 0.7s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── BOTTOM NAV (mobile only) ── */
+  .bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: var(--bg2);
+    border-top: 1px solid var(--border);
+    z-index: 100;
+    padding: 8px 0 env(safe-area-inset-bottom, 8px);
+  }
+
+  .bottom-nav-inner {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+  }
+
+  .bn-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    color: var(--text3);
+    font-size: 10px;
+    font-weight: 500;
+    padding: 6px 12px;
+    cursor: pointer;
+    transition: color 0.2s;
+  }
+
+  .bn-item i { font-size: 20px; }
+  .bn-item.active { color: var(--purple-l); }
+
+  /* ── MOBILE HEADER ── */
+  .mobile-header {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 16px 10px;
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+
+  .mobile-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .mobile-logo .logo-icon {
+    width: 28px; height: 28px;
+    font-size: 13px;
+  }
+
+  .mobile-header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mobile-header select {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text1);
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-family: 'Rubik', sans-serif;
+    outline: none;
+  }
+
+  .mobile-refresh {
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    color: var(--text2);
+    width: 32px; height: 32px;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    cursor: pointer;
+  }
+
+  /* ══════════════════════════
+     RESPONSIVE — TABLET / MOBILE
+  ══════════════════════════ */
+
+  @media (max-width: 1024px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .grid-2   { grid-template-columns: 1fr; }
+    .grid-3   { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .main {
+      margin-left: 0;
+      padding: 12px 12px 80px;
+    }
+    .header { display: none; }
+    .mobile-header { display: flex; }
+    .bottom-nav { display: block; }
+
+    .kpi-grid {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .kpi-card { padding: 16px; border-radius: 12px; }
+    .kpi-icon-box { width: 34px; height: 34px; font-size: 16px; margin-bottom: 10px; }
+    .kpi-value { font-size: 20px; }
+    .kpi-label { font-size: 10px; }
+    .kpi-sub { font-size: 11px; }
+
+    .grid-2 { grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px; }
+    .grid-3 { grid-template-columns: 1fr; gap: 10px; }
+
+    .card { padding: 16px; border-radius: 12px; }
+    .card-title { font-size: 11px; margin-bottom: 14px; }
+
+    .donut-wrap { max-width: 200px; }
+    .donut-center-val { font-size: 15px; }
+
+    .scrollable { max-height: 260px; }
+
+    .tx-item:hover { margin: 0; padding: 11px 0; background: transparent; border-radius: 0; }
+  }
+
+  @media (max-width: 380px) {
+    .kpi-value { font-size: 17px; }
+    .main { padding: 10px 10px 80px; }
+  }
 </style>
 </head>
 <body>
@@ -424,6 +562,18 @@
 <div class="loading-overlay" id="loadingOverlay">
   <div class="spinner"></div>
   Загрузка данных...
+</div>
+
+<!-- MOBILE HEADER -->
+<div class="mobile-header">
+  <div class="mobile-logo">
+    <div class="logo-icon"><i class="ri-bar-chart-2-line"></i></div>
+    ФинТрекер
+  </div>
+  <div class="mobile-header-right">
+    <select id="monthSelectMobile" onchange="syncMonth('mobile')"></select>
+    <div class="mobile-refresh" onclick="loadData()"><i class="ri-refresh-line"></i></div>
+  </div>
 </div>
 
 <!-- SIDEBAR -->
@@ -448,17 +598,28 @@
   </div>
 </nav>
 
+<!-- BOTTOM NAV -->
+<nav class="bottom-nav">
+  <div class="bottom-nav-inner">
+    <div class="bn-item active"><i class="ri-dashboard-line"></i>Дашборд</div>
+    <div class="bn-item"><i class="ri-arrow-up-circle-line"></i>Доходы</div>
+    <div class="bn-item"><i class="ri-arrow-down-circle-line"></i>Расходы</div>
+    <div class="bn-item"><i class="ri-bank-card-line"></i>Долги</div>
+    <div class="bn-item"><i class="ri-exchange-line"></i>Операции</div>
+  </div>
+</nav>
+
 <!-- MAIN -->
 <main class="main">
 
-  <!-- HEADER -->
+  <!-- DESKTOP HEADER -->
   <div class="header">
     <div>
       <h1>Обзор финансов</h1>
       <p id="header-subtitle">Загрузка...</p>
     </div>
     <div class="header-right">
-      <select class="month-selector" id="monthSelect" onchange="onMonthChange()"></select>
+      <select class="month-selector" id="monthSelect" onchange="syncMonth('desktop')"></select>
       <button class="btn-refresh" onclick="loadData()"><i class="ri-refresh-line"></i> Обновить</button>
     </div>
   </div>
@@ -496,7 +657,7 @@
     <div class="card">
       <div class="card-title">
         Движение денег
-        <span style="font-size:12px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0" id="chart-period">текущий месяц</span>
+        <span style="font-size:12px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0" id="chart-period"></span>
       </div>
       <canvas id="lineChart" height="148"></canvas>
     </div>
@@ -516,19 +677,15 @@
   <!-- BARS + DEBTS + TX -->
   <div class="grid-3">
 
-    <!-- CATEGORY BARS -->
     <div class="card">
       <div class="card-title">По категориям</div>
       <div id="category-bars">
-        <div style="color:var(--text3);font-size:13px;padding:20px 0 10px;text-align:center">Загрузка...</div>
+        <div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Загрузка...</div>
       </div>
     </div>
 
-    <!-- DEBTS -->
     <div class="card">
-      <div class="card-title">
-        Долги
-      </div>
+      <div class="card-title">Долги</div>
       <div id="debt-list">
         <div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Загрузка...</div>
       </div>
@@ -538,11 +695,8 @@
       </div>
     </div>
 
-    <!-- TRANSACTIONS -->
     <div class="card">
-      <div class="card-title">
-        Последние операции
-      </div>
+      <div class="card-title">Последние операции</div>
       <div class="scrollable" id="transactions-list">
         <div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Загрузка...</div>
       </div>
@@ -554,11 +708,17 @@
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec';
 
+// Telegram Web App init
+if (window.Telegram && window.Telegram.WebApp) {
+  window.Telegram.WebApp.expand();
+  window.Telegram.WebApp.setHeaderColor('#121212');
+  window.Telegram.WebApp.setBackgroundColor('#121212');
+}
+
 let lineChartInst = null;
 let donutChartInst = null;
 let allData = null;
 
-// ── CATEGORY CONFIG ──
 const CAT_CONFIG = {
   'Материалы':        { icon: 'ri-hammer-line',        color: '#3b82f6', grad: ['#2563eb','#3b82f6'], cls: 'work' },
   'Бензин':           { icon: 'ri-gas-station-line',    color: '#ffbb33', grad: ['#e67e22','#ffbb33'], cls: 'fuel' },
@@ -580,13 +740,10 @@ function getCat(name) {
   return CAT_CONFIG[name] || { icon: 'ri-price-tag-3-line', color: '#5a5a5a', grad: ['#3a3a3a','#5a5a5a'], cls: 'other' };
 }
 
-// ── DATE HELPERS ──
 function parseDate(raw) {
   if (!raw) return null;
   if (raw instanceof Date) return raw;
-  // "2026-03-31"
   if (typeof raw === 'string' && raw.includes('-')) return new Date(raw);
-  // "31.03.2026"
   if (typeof raw === 'string' && raw.includes('.')) {
     const [d, m, y] = raw.split('.');
     return new Date(y, m - 1, d);
@@ -596,7 +753,7 @@ function parseDate(raw) {
 
 function toYYYYMM(dateStr) {
   if (!dateStr) return '';
-  return dateStr.substring(0, 7); // "2026-03"
+  return dateStr.substring(0, 7);
 }
 
 function formatRu(amount) {
@@ -618,58 +775,60 @@ function formatDayRu(dateStr) {
   return parseInt(d) + ' ' + months[parseInt(m) - 1];
 }
 
-// ── LOAD DATA ──
 async function loadData() {
   document.getElementById('loadingOverlay').classList.add('active');
   try {
     const res = await fetch(API_URL);
     allData = await res.json();
-    populateMonthSelector();
+    populateMonthSelectors();
     const month = document.getElementById('monthSelect').value;
     renderDashboard(month);
   } catch(e) {
-    document.getElementById('header-subtitle').textContent = 'Ошибка загрузки данных';
+    document.getElementById('header-subtitle').textContent = 'Ошибка загрузки';
     console.error(e);
   } finally {
     document.getElementById('loadingOverlay').classList.remove('active');
   }
 }
 
-function onMonthChange() {
-  if (!allData) return;
-  renderDashboard(document.getElementById('monthSelect').value);
-}
-
-function populateMonthSelector() {
+function populateMonthSelectors() {
   const months = [...new Set(
-    allData.operations
-      .map(o => toYYYYMM(o.date))
-      .filter(Boolean)
+    allData.operations.map(o => toYYYYMM(o.date)).filter(Boolean)
   )].sort().reverse();
 
-  const sel = document.getElementById('monthSelect');
-  sel.innerHTML = '';
-  months.forEach(m => {
-    const opt = document.createElement('option');
-    opt.value = m;
-    opt.textContent = monthLabel(m);
-    sel.appendChild(opt);
+  ['monthSelect', 'monthSelectMobile'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (!sel) return;
+    sel.innerHTML = '';
+    months.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m;
+      opt.textContent = monthLabel(m);
+      sel.appendChild(opt);
+    });
   });
 }
 
-// ── RENDER DASHBOARD ──
+function syncMonth(from) {
+  const src = from === 'mobile' ? 'monthSelectMobile' : 'monthSelect';
+  const dst = from === 'mobile' ? 'monthSelect' : 'monthSelectMobile';
+  const val = document.getElementById(src).value;
+  const dstEl = document.getElementById(dst);
+  if (dstEl) dstEl.value = val;
+  if (allData) renderDashboard(val);
+}
+
 function renderDashboard(monthKey) {
   const ops = allData.operations.filter(o => toYYYYMM(o.date) === monthKey);
   const activeDebts = allData.debts.filter(d => d.status === 'активный');
 
-  const incomeOps   = ops.filter(o => o.type === 'доход');
-  const expenseOps  = ops.filter(o => o.type === 'расход');
+  const incomeOps    = ops.filter(o => o.type === 'доход');
+  const expenseOps   = ops.filter(o => o.type === 'расход');
   const totalIncome  = incomeOps.reduce((s, o) => s + Number(o.amount), 0);
   const totalExpenses = expenseOps.reduce((s, o) => s + Number(o.amount), 0);
   const balance = totalIncome - totalExpenses;
   const totalDebt = activeDebts.reduce((s, d) => s + Number(d.remaining), 0);
 
-  // KPI
   document.getElementById('kpi-balance').textContent   = formatRu(balance);
   document.getElementById('kpi-income').textContent    = formatRu(totalIncome);
   document.getElementById('kpi-expenses').textContent  = formatRu(totalExpenses);
@@ -678,12 +837,9 @@ function renderDashboard(monthKey) {
   document.getElementById('kpi-expenses-sub').textContent = expenseOps.length + ' операций';
   document.getElementById('kpi-debts-sub').textContent   = activeDebts.length + ' кредитора';
   document.getElementById('kpi-balance-sub').textContent = balance >= 0 ? 'доходы превышают расходы' : 'расходы превышают доходы';
-
-  document.getElementById('header-subtitle').textContent =
-    'Обновлено только что · ' + monthLabel(monthKey);
+  document.getElementById('header-subtitle').textContent = 'Обновлено только что · ' + monthLabel(monthKey);
   document.getElementById('chart-period').textContent = monthLabel(monthKey);
 
-  // Categories
   const catMap = {};
   expenseOps.forEach(o => {
     const cat = o.category || 'Прочее';
@@ -700,7 +856,6 @@ function renderDashboard(monthKey) {
   renderTransactions(sorted);
 }
 
-// ── CATEGORY BARS ──
 function renderCategoryBars(cats, total) {
   const el = document.getElementById('category-bars');
   if (!cats.length) {
@@ -711,96 +866,66 @@ function renderCategoryBars(cats, total) {
   let html = cats.slice(0, 6).map(([name, val]) => {
     const cfg = getCat(name);
     const pct = Math.round(val / maxVal * 100);
-    return `
-      <div class="cat-item">
-        <div class="cat-header">
-          <span class="cat-name-wrap"><i class="${cfg.icon}" style="color:${cfg.color}"></i> ${name}</span>
-          <span class="cat-val">${formatRu(val)}</span>
-        </div>
-        <div class="cat-bar-wrap">
-          <div class="cat-bar" style="width:${pct}%;background:linear-gradient(90deg,${cfg.grad[0]},${cfg.grad[1]})"></div>
-        </div>
-      </div>`;
-  }).join('');
-  html += `
-    <div class="total-row">
-      <span class="total-label">Итого расходов</span>
-      <span class="total-val">${formatRu(total)}</span>
+    return `<div class="cat-item">
+      <div class="cat-header">
+        <span class="cat-name-wrap"><i class="${cfg.icon}" style="color:${cfg.color}"></i> ${name}</span>
+        <span class="cat-val">${formatRu(val)}</span>
+      </div>
+      <div class="cat-bar-wrap">
+        <div class="cat-bar" style="width:${pct}%;background:linear-gradient(90deg,${cfg.grad[0]},${cfg.grad[1]})"></div>
+      </div>
     </div>`;
+  }).join('');
+  html += `<div class="total-row">
+    <span class="total-label">Итого расходов</span>
+    <span class="total-val">${formatRu(total)}</span>
+  </div>`;
   el.innerHTML = html;
 }
 
-// ── DONUT CHART ──
 const DONUT_COLORS = ['#3b82f6','#ffbb33','#00c49a','#7e5bef','#f97316','#ec4899','#5a5a5a'];
 
 function renderDonut(cats, total) {
-  document.getElementById('donut-center-val').textContent =
-    '₽' + (total / 1000).toFixed(1) + 'k';
-
-  const labels = cats.map(c => c[0]);
-  const data   = cats.map(c => c[1]);
-  const colors = cats.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]);
-
+  document.getElementById('donut-center-val').textContent = '₽' + (total / 1000).toFixed(1) + 'k';
   if (donutChartInst) donutChartInst.destroy();
   donutChartInst = new Chart(document.getElementById('donutChart').getContext('2d'), {
     type: 'doughnut',
     data: {
-      labels,
+      labels: cats.map(c => c[0]),
       datasets: [{
-        data,
-        backgroundColor: colors,
-        borderColor: '#1e1e1e',
-        borderWidth: 4,
-        hoverOffset: 10,
-        borderRadius: 4,
+        data: cats.map(c => c[1]),
+        backgroundColor: cats.map((_, i) => DONUT_COLORS[i % DONUT_COLORS.length]),
+        borderColor: '#1e1e1e', borderWidth: 4, hoverOffset: 10, borderRadius: 4,
       }]
     },
     options: {
-      cutout: '68%',
-      responsive: true,
+      cutout: '68%', responsive: true,
       plugins: {
-        legend: {
-          position: 'bottom',
-          labels: {
-            color: '#b3b3b3',
-            boxWidth: 10, boxHeight: 10,
-            borderRadius: 3, useBorderRadius: true,
-            font: { size: 12, family: 'Rubik' },
-            padding: 14
-          }
-        },
+        legend: { position: 'bottom', labels: { color: '#b3b3b3', boxWidth: 10, boxHeight: 10, borderRadius: 3, useBorderRadius: true, font: { size: 12, family: 'Rubik' }, padding: 14 } },
         tooltip: {
-          backgroundColor: '#1e1e1e',
-          borderColor: '#2a2a2a', borderWidth: 1,
+          backgroundColor: '#1e1e1e', borderColor: '#2a2a2a', borderWidth: 1,
           titleColor: '#fff', bodyColor: '#b3b3b3', padding: 12,
-          callbacks: {
-            label: ctx => {
-              const pct = total ? Math.round(ctx.raw / total * 100) : 0;
-              return ` ₽ ${ctx.raw.toLocaleString('ru')}  (${pct}%)`;
-            }
-          }
+          callbacks: { label: ctx => { const pct = total ? Math.round(ctx.raw / total * 100) : 0; return ` ₽ ${ctx.raw.toLocaleString('ru')}  (${pct}%)`; } }
         }
       }
     }
   });
 }
 
-// ── LINE CHART ──
 function renderLineChart(ops, monthKey) {
   const [y, m] = monthKey.split('-').map(Number);
   const daysInMonth = new Date(y, m, 0).getDate();
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
-
   const incByDay = new Array(daysInMonth).fill(0);
   const expByDay = new Array(daysInMonth).fill(0);
 
   ops.forEach(o => {
     const d = parseDate(o.date);
     if (!d) return;
-    const dayIdx = d.getDate() - 1;
-    if (dayIdx < 0 || dayIdx >= daysInMonth) return;
-    if (o.type === 'доход')   incByDay[dayIdx] += Number(o.amount);
-    if (o.type === 'расход')  expByDay[dayIdx] += Number(o.amount);
+    const idx = d.getDate() - 1;
+    if (idx < 0 || idx >= daysInMonth) return;
+    if (o.type === 'доход')  incByDay[idx] += Number(o.amount);
+    if (o.type === 'расход') expByDay[idx] += Number(o.amount);
   });
 
   let ci = 0, ce = 0;
@@ -813,142 +938,78 @@ function renderLineChart(ops, monthKey) {
     data: {
       labels: days,
       datasets: [
-        {
-          label: 'Доходы',
-          data: incCum,
-          borderColor: '#00c49a',
-          backgroundColor: 'rgba(0,196,154,0.1)',
-          borderWidth: 2.5,
-          pointRadius: 0, pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#00c49a',
-          tension: 0.45, fill: true,
-        },
-        {
-          label: 'Расходы',
-          data: expCum,
-          borderColor: '#ff4d4f',
-          backgroundColor: 'rgba(255,77,79,0.07)',
-          borderWidth: 2.5,
-          pointRadius: 0, pointHoverRadius: 5,
-          pointHoverBackgroundColor: '#ff4d4f',
-          tension: 0.45, fill: true,
-        }
+        { label: 'Доходы', data: incCum, borderColor: '#00c49a', backgroundColor: 'rgba(0,196,154,0.1)', borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: '#00c49a', tension: 0.45, fill: true },
+        { label: 'Расходы', data: expCum, borderColor: '#ff4d4f', backgroundColor: 'rgba(255,77,79,0.07)', borderWidth: 2.5, pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: '#ff4d4f', tension: 0.45, fill: true }
       ]
     },
     options: {
       responsive: true,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: {
-          labels: {
-            color: '#b3b3b3', boxWidth: 10, boxHeight: 10,
-            borderRadius: 3, useBorderRadius: true,
-            font: { size: 12, family: 'Rubik' }
-          }
-        },
-        tooltip: {
-          backgroundColor: '#1e1e1e', borderColor: '#2a2a2a', borderWidth: 1,
-          titleColor: '#ffffff', bodyColor: '#b3b3b3', padding: 12,
-          callbacks: {
-            title: items => `День ${items[0].label}`,
-            label: ctx => ` ${ctx.dataset.label}: ₽ ${ctx.raw.toLocaleString('ru')}`
-          }
-        }
+        legend: { labels: { color: '#b3b3b3', boxWidth: 10, boxHeight: 10, borderRadius: 3, useBorderRadius: true, font: { size: 12, family: 'Rubik' } } },
+        tooltip: { backgroundColor: '#1e1e1e', borderColor: '#2a2a2a', borderWidth: 1, titleColor: '#fff', bodyColor: '#b3b3b3', padding: 12, callbacks: { title: i => `День ${i[0].label}`, label: ctx => ` ${ctx.dataset.label}: ₽ ${ctx.raw.toLocaleString('ru')}` } }
       },
       scales: {
-        x: {
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: { color: '#5a5a5a', font: { size: 11, family: 'Rubik' }, maxTicksLimit: 8 }
-        },
-        y: {
-          grid: { color: 'rgba(255,255,255,0.04)' },
-          ticks: {
-            color: '#5a5a5a', font: { size: 11, family: 'Rubik' },
-            callback: v => '₽' + (v / 1000).toFixed(0) + 'k'
-          }
-        }
+        x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#5a5a5a', font: { size: 11, family: 'Rubik' }, maxTicksLimit: 8 } },
+        y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#5a5a5a', font: { size: 11, family: 'Rubik' }, callback: v => '₽' + (v/1000).toFixed(0) + 'k' } }
       }
     }
   });
 }
 
-// ── DEBTS ──
 const DEBT_ICONS = {
-  'кредитка':   { icon: 'ri-bank-card-line',   color: 'rgba(255,77,79,0.1)',    textColor: 'var(--red)' },
-  'поставщик':  { icon: 'ri-building-2-line',  color: 'rgba(255,187,51,0.1)',   textColor: '#ffbb33' },
-  'займ':       { icon: 'ri-hand-coin-line',   color: 'rgba(126,91,239,0.1)',   textColor: 'var(--purple-l)' },
-  'прочее':     { icon: 'ri-file-list-3-line', color: 'rgba(90,90,90,0.15)',    textColor: 'var(--text3)' },
+  'кредитка':  { icon: 'ri-bank-card-line',  color: 'rgba(255,77,79,0.1)',  textColor: 'var(--red)' },
+  'поставщик': { icon: 'ri-building-2-line', color: 'rgba(255,187,51,0.1)', textColor: '#ffbb33' },
+  'займ':      { icon: 'ri-hand-coin-line',  color: 'rgba(126,91,239,0.1)', textColor: 'var(--purple-l)' },
+  'прочее':    { icon: 'ri-file-list-3-line',color: 'rgba(90,90,90,0.15)',  textColor: 'var(--text3)' },
 };
 
 function renderDebts(debts, total) {
-  const el = document.getElementById('debt-list');
   document.getElementById('debt-total').textContent = formatRu(total);
-
+  const el = document.getElementById('debt-list');
   if (!debts.length) {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Нет активных долгов</div>';
     return;
   }
-
   el.innerHTML = debts.map(d => {
     const cfg = DEBT_ICONS[d.type] || DEBT_ICONS['прочее'];
     const pct = d.initial > 0 ? Math.round(d.paid / d.initial * 100) : 0;
-    const barColor = cfg.textColor === 'var(--red)'
-      ? 'linear-gradient(90deg,#c0392b,#ff4d4f)'
-      : 'linear-gradient(90deg,#e67e22,#ffbb33)';
-    return `
-      <div class="debt-item">
-        <div class="debt-icon-box" style="background:${cfg.color};color:${cfg.textColor}">
-          <i class="${cfg.icon}"></i>
-        </div>
-        <div class="debt-info">
-          <div class="debt-name">${d.creditor}</div>
-          <div class="debt-bar-wrap">
-            <div class="debt-bar" style="width:${pct}%;background:${barColor}"></div>
-          </div>
-          <div class="debt-meta">
-            <span>Погашено ${pct}%</span>
-            <span>было ${formatRu(d.initial)}</span>
-          </div>
-        </div>
-        <div class="debt-amount" style="color:${cfg.textColor}">${formatRu(d.remaining)}</div>
-      </div>`;
+    const barColor = cfg.textColor === 'var(--red)' ? 'linear-gradient(90deg,#c0392b,#ff4d4f)' : 'linear-gradient(90deg,#e67e22,#ffbb33)';
+    return `<div class="debt-item">
+      <div class="debt-icon-box" style="background:${cfg.color};color:${cfg.textColor}"><i class="${cfg.icon}"></i></div>
+      <div class="debt-info">
+        <div class="debt-name">${d.creditor}</div>
+        <div class="debt-bar-wrap"><div class="debt-bar" style="width:${pct}%;background:${barColor}"></div></div>
+        <div class="debt-meta"><span>Погашено ${pct}%</span><span>было ${formatRu(d.initial)}</span></div>
+      </div>
+      <div class="debt-amount" style="color:${cfg.textColor}">${formatRu(d.remaining)}</div>
+    </div>`;
   }).join('');
 }
 
-// ── TRANSACTIONS ──
 function renderTransactions(ops) {
   const el = document.getElementById('transactions-list');
   if (!ops.length) {
     el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Нет операций</div>';
     return;
   }
-
   el.innerHTML = ops.map(o => {
     const isIncome = o.type === 'доход';
     const cfg = getCat(o.category);
     const iconClass = isIncome ? 'income' : cfg.cls;
     const icon = isIncome ? 'ri-arrow-down-line' : cfg.icon;
-    const amountClass = isIncome ? 'plus' : 'minus';
-    const sign = isIncome ? '+' : '−';
-    const dateStr = formatDayRu(o.date);
-    return `
-      <div class="tx-item">
-        <div class="tx-icon ${iconClass}"><i class="${icon}"></i></div>
-        <div class="tx-info">
-          <div class="tx-name">${o.description || o.category || '—'}</div>
-          <div class="tx-date">${dateStr} · ${o.category || o.group || ''}</div>
-        </div>
-        <div class="tx-amount ${amountClass}">${sign}₽ ${Number(o.amount).toLocaleString('ru')}</div>
-      </div>`;
+    return `<div class="tx-item">
+      <div class="tx-icon ${iconClass}"><i class="${icon}"></i></div>
+      <div class="tx-info">
+        <div class="tx-name">${o.description || o.category || '—'}</div>
+        <div class="tx-date">${formatDayRu(o.date)} · ${o.category || o.group || ''}</div>
+      </div>
+      <div class="tx-amount ${isIncome ? 'plus' : 'minus'}">${isIncome ? '+' : '−'}₽ ${Number(o.amount).toLocaleString('ru')}</div>
+    </div>`;
   }).join('');
 }
 
-// ── INIT ──
-if (window.Telegram && window.Telegram.WebApp) {
-  window.Telegram.WebApp.expand();
-}
 loadData();
-
 </script>
 </body>
 </html>
