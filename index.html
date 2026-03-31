@@ -389,7 +389,7 @@ window.onerror = function(msg, src, line) {
 </main>
 
 <script>
-const API_URL = 'https://script.google.com/macros/s/AKfycbxxS_UCbeAF8E6anFDlFb_3bqw0zIeH1apd3hAj_ZmsiqNOVaZSsrtO4N4UzfjFbph7/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec';
 
 try {
   if (window.Telegram && window.Telegram.WebApp) {
@@ -529,10 +529,47 @@ function showError(msg) {
     '</div>';
 }
 
-// Основной fetch с AbortController (надёжнее Promise.race на iOS)
+// Определяем iOS: fetch на iOS делает медленный CORS preflight из-за редиректа Apps Script
+function isIOS() {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+
+// JSONP — не делает preflight, работает быстро на iOS
+function fetchJSONP(timeout) {
+  return new Promise(function(resolve, reject) {
+    var cbName = '_fc' + Date.now();
+    var script = document.createElement('script');
+    var timer = setTimeout(function() {
+      cleanup();
+      reject(new Error('timeout'));
+    }, timeout || 15000);
+    function cleanup() {
+      clearTimeout(timer);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+    window[cbName] = function(data) {
+      cleanup();
+      resolve(data);
+    };
+    script.src = API_URL + '?callback=' + cbName;
+    script.onerror = function() {
+      cleanup();
+      reject(new Error('network'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
 async function fetchAPI() {
+  // На iOS fetch делает медленный CORS preflight — сразу используем JSONP
+  if (isIOS()) {
+    return fetchJSONP(15000);
+  }
+
+  // Десктоп — стандартный fetch
   const controller = new AbortController();
-  // 12 сек — достаточно даже при "холодном старте" Apps Script
   const tid = setTimeout(() => controller.abort(), 12000);
   try {
     const res = await fetch(API_URL, {
@@ -548,29 +585,8 @@ async function fetchAPI() {
   } catch(e) {
     clearTimeout(tid);
     if (e.name === 'AbortError') throw new Error('timeout');
-    // JSONP-запасной вариант (обходит CORS/редирект на iOS WKWebView)
-    return new Promise(function(resolve, reject) {
-      var cbName = '_fc' + Date.now();
-      var timer = setTimeout(function() {
-        delete window[cbName];
-        if (script.parentNode) script.parentNode.removeChild(script);
-        reject(new Error('timeout'));
-      }, 12000);
-      window[cbName] = function(data) {
-        clearTimeout(timer);
-        delete window[cbName];
-        if (script.parentNode) script.parentNode.removeChild(script);
-        resolve(data);
-      };
-      var script = document.createElement('script');
-      script.src = API_URL + '?callback=' + cbName;
-      script.onerror = function() {
-        clearTimeout(timer);
-        delete window[cbName];
-        reject(new Error('network'));
-      };
-      document.head.appendChild(script);
-    });
+    // Запасной JSONP если fetch упал по другой причине
+    return fetchJSONP(12000);
   }
 }
 
