@@ -1,6 +1,8 @@
 name: Update Finance Data
 
 on:
+  repository_dispatch:
+    types: [sheets-updated]
   schedule:
     - cron: '*/15 * * * *'
   workflow_dispatch:
