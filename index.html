@@ -11,7 +11,25 @@
 <noscript><link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet"></noscript>
 <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet" media="print" onload="this.media='all'">
 <noscript><link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet"></noscript>
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script>
+// Инициализация Telegram — работает даже без внешнего скрипта
+// (внутри Telegram SDK уже встроен до загрузки страницы)
+function initTelegram() {
+  try {
+    if (window.Telegram && window.Telegram.WebApp) {
+      var twa = window.Telegram.WebApp;
+      if (typeof twa.ready === 'function') twa.ready();
+      if (typeof twa.expand === 'function') twa.expand();
+      if (typeof twa.setHeaderColor === 'function') twa.setHeaderColor('#121212');
+      if (typeof twa.setBackgroundColor === 'function') twa.setBackgroundColor('#121212');
+    }
+  } catch(e) { console.warn('[TWA]', e); }
+}
+// Вызываем сразу (для Telegram — SDK уже есть)
+initTelegram();
+</script>
+<!-- async — не блокирует рендер; onload — для тестирования в браузере -->
+<script src="https://telegram.org/js/telegram-web-app.js" async onload="initTelegram()"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js" defer id="chartjs-script"></script>
 <style>
   :root {
@@ -390,16 +408,6 @@ window.onerror = function(msg, src, line) {
 
 <script>
 const API_URL = 'https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec';
-
-try {
-  if (window.Telegram && window.Telegram.WebApp) {
-    const twa = window.Telegram.WebApp;
-    if (typeof twa.ready === 'function') twa.ready(); // сигнал Telegram: страница готова
-    if (typeof twa.expand === 'function') twa.expand();
-    if (typeof twa.setHeaderColor === 'function') twa.setHeaderColor('#121212');
-    if (typeof twa.setBackgroundColor === 'function') twa.setBackgroundColor('#121212');
-  }
-} catch(e) { console.warn('[TWA]', e); }
 
 let lineChartInst = null, donutChartInst = null;
 let allData = null;
