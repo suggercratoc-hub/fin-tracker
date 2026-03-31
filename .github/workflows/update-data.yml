@@ -12,11 +12,6 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Pull latest changes
-        run: git pull origin main
-
       - name: Fetch data from Apps Script
         run: |
           curl -L --max-time 30 \
@@ -26,10 +21,19 @@ jobs:
       - name: Validate JSON
         run: python3 -c "import json; json.load(open('data.json')); print('JSON valid')"
 
-      - name: Commit and push if changed
+      - name: Upload data.json via GitHub API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add data.json
-          git diff --staged --quiet || git commit -m "chore: update finance data $(date -u +%H:%M)"
-          git push
+          SHA=$(gh api "repos/${{ github.repository }}/contents/data.json" --jq '.sha' 2>/dev/null || echo "")
+          CONTENT=$(base64 -w 0 data.json)
+          if [ -n "$SHA" ]; then
+            gh api --method PUT "repos/${{ github.repository }}/contents/data.json" \
+              -f message="chore: update finance data $(date -u +%H:%M)" \
+              -f content="$CONTENT" \
+              -f sha="$SHA"
+          else
+            gh api --method PUT "repos/${{ github.repository }}/contents/data.json" \
+              -f message="chore: update finance data $(date -u +%H:%M)" \
+              -f content="$CONTENT"
+          fi
