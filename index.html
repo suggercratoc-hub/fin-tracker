@@ -6,6 +6,7 @@
 <title>ФинТрекер — Дашборд</title>
 <link href="https://fonts.googleapis.com/css2?family=Rubik:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" rel="stylesheet">
+ <script src="https://telegram.org/js/telegram-web-app.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   :root {
@@ -943,7 +944,11 @@ function renderTransactions(ops) {
 }
 
 // ── INIT ──
+if (window.Telegram && window.Telegram.WebApp) {
+  window.Telegram.WebApp.expand();
+}
 loadData();
+
 </script>
 </body>
 </html>
