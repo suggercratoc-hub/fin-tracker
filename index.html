@@ -461,26 +461,53 @@ async function loadData() {
   document.getElementById('loadingOverlay').classList.add('active');
 
   try {
-    const res = await fetch(API_URL + '?t=' + Date.now(), {
-      cache: 'no-store',
-      headers: {
-        'Accept': 'application/json'
-      }
+    const url = API_URL + '?t=' + Date.now(); // убираем кеш
+
+    const data = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+
+      xhr.open('GET', url, true);
+      xhr.timeout = 10000; // 10 секунд максимум
+
+      xhr.onreadystatechange = function () {
+        if (xhr.readyState === 4) {
+          if (xhr.status === 200) {
+            try {
+              const json = JSON.parse(xhr.responseText);
+              resolve(json);
+            } catch (e) {
+              reject('Ошибка парсинга JSON');
+            }
+          } else {
+            reject('Ошибка запроса: ' + xhr.status);
+          }
+        }
+      };
+
+      xhr.ontimeout = function () {
+        reject('Таймаут запроса');
+      };
+
+      xhr.onerror = function () {
+        reject('Сетевая ошибка');
+      };
+
+      xhr.send();
     });
 
-    allData = await res.json();
+    allData = data;
 
     populateMonthSelectors();
     const month = document.getElementById('monthSelect').value;
     renderDashboard(month);
 
-  } catch(e) {
+  } catch (e) {
+    console.error(e);
     document.getElementById('header-subtitle').textContent = 'Ошибка загрузки';
   } finally {
     document.getElementById('loadingOverlay').classList.remove('active');
   }
 }
-
 function populateMonthSelectors() {
   const months = [...new Set(allData.operations.map(o=>toYYYYMM(o.date)).filter(Boolean))].sort().reverse();
   ['monthSelect','monthSelectMobile'].forEach(id => {
