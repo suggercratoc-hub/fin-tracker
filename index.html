@@ -389,7 +389,7 @@ window.onerror = function(msg, src, line) {
 </main>
 
 <script>
-const API_URL = 'https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec';
+const API_URL = 'https://script.google.com/macros/s/AKfycbxxS_UCbeAF8E6anFDlFb_3bqw0zIeH1apd3hAj_ZmsiqNOVaZSsrtO4N4UzfjFbph7/exec';
 
 try {
   if (window.Telegram && window.Telegram.WebApp) {
@@ -532,7 +532,8 @@ function showError(msg) {
 // Основной fetch с AbortController (надёжнее Promise.race на iOS)
 async function fetchAPI() {
   const controller = new AbortController();
-  const tid = setTimeout(() => controller.abort(), 20000);
+  // 12 сек — достаточно даже при "холодном старте" Apps Script
+  const tid = setTimeout(() => controller.abort(), 12000);
   try {
     const res = await fetch(API_URL, {
       redirect: 'follow',
@@ -554,7 +555,7 @@ async function fetchAPI() {
         delete window[cbName];
         if (script.parentNode) script.parentNode.removeChild(script);
         reject(new Error('timeout'));
-      }, 20000);
+      }, 12000);
       window[cbName] = function(data) {
         clearTimeout(timer);
         delete window[cbName];
@@ -586,14 +587,29 @@ async function loadData() {
   }
 
   showOverlay('Загрузка данных...');
+
+  // Через 4 сек — показываем пояснение (сервер "просыпается" после простоя)
+  const slowTimer = setTimeout(() => {
+    const el = document.getElementById('loadingOverlay');
+    if (el && el.style.display !== 'none') {
+      el.innerHTML = '<div class="spinner"></div>' +
+        '<div style="text-align:center;max-width:260px">' +
+        '<div style="margin-bottom:6px">Загрузка данных...</div>' +
+        '<div style="font-size:11px;color:var(--text3)">Сервер просыпается после простоя,<br>подождите ещё немного ☕</div>' +
+        '</div>';
+    }
+  }, 4000);
+
   try {
     const data = await fetchAPI();
+    clearTimeout(slowTimer);
     setCache(data);
     hideOverlay();
     applyData(data);
   } catch(e) {
+    clearTimeout(slowTimer);
     const msg = e.message === 'timeout'
-      ? 'Сервер не отвечает.\nНажми «Попробовать снова».'
+      ? 'Сервер не ответил за 12 секунд.\nОбнови страницу — при следующем\nзапросе будет быстрее.'
       : 'Ошибка загрузки данных';
     showError(msg);
   }
