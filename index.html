@@ -534,7 +534,7 @@ function showError(msg) {
 }
 
 async function fetchAPI() {
-  const res = await fetch(DATA_URL);
+ const res = await fetch(DATA_URL + '?t=' + Date.now());
   if (!res.ok) throw new Error('HTTP ' + res.status);
   return res.json();
 }
