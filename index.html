@@ -461,42 +461,23 @@ async function loadData() {
   document.getElementById('loadingOverlay').classList.add('active');
 
   try {
-    const url = API_URL + '?t=' + Date.now(); // убираем кеш
-
-    const data = await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-
-      xhr.open('GET', url, true);
-      xhr.timeout = 10000; // 10 секунд максимум
-
-      xhr.onreadystatechange = function () {
-        if (xhr.readyState === 4) {
-          if (xhr.status === 200) {
-            try {
-              const json = JSON.parse(xhr.responseText);
-              resolve(json);
-            } catch (e) {
-              reject('Ошибка парсинга JSON');
-            }
-          } else {
-            reject('Ошибка запроса: ' + xhr.status);
-          }
-        }
-      };
-
-      xhr.ontimeout = function () {
-        reject('Таймаут запроса');
-      };
-
-      xhr.onerror = function () {
-        reject('Сетевая ошибка');
-      };
-
-      xhr.send();
+    const url = API_URL + '?t=' + Date.now();
+    
+    // Используем fetch вместо XHR (быстрее и надежнее)
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      // Важно: не ждать ответа синхронно
     });
-
+    
+    if (!response.ok) throw new Error('Ошибка ' + response.status);
+    
+    const data = await response.json();
     allData = data;
 
+    // Добавляем принудительный микро-таймаут для UI
+    await new Promise(resolve => setTimeout(resolve, 10));
+    
     populateMonthSelectors();
     const month = document.getElementById('monthSelect').value;
     renderDashboard(month);
@@ -504,6 +485,8 @@ async function loadData() {
   } catch (e) {
     console.error(e);
     document.getElementById('header-subtitle').textContent = 'Ошибка загрузки';
+    // Показываем fallback-данные
+    showFallbackData();
   } finally {
     document.getElementById('loadingOverlay').classList.remove('active');
   }
