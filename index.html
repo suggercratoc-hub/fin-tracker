@@ -87,6 +87,20 @@ initTelegram();
   .kpi-label { font-size:12px; color:var(--text3); text-transform:uppercase; letter-spacing:0.6px; margin-bottom:6px; font-weight:500; }
   .kpi-value { font-size:26px; font-weight:700; letter-spacing:-0.5px; margin-bottom:8px; }
   .kpi-sub   { font-size:12px; color:var(--text3); }
+  .kpi-delta { font-size:11px; font-weight:600; margin-top:4px; display:flex; align-items:center; gap:3px; }
+  .kpi-delta.up   { color:var(--teal); }
+  .kpi-delta.down { color:var(--red); }
+  .kpi-delta.same { color:var(--text3); }
+  .group-toggle { display:flex; gap:3px; background:var(--bg3); border-radius:8px; padding:3px; }
+  .group-btn { padding:5px 11px; border-radius:6px; font-size:12px; font-weight:500; cursor:pointer; color:var(--text2); transition:all 0.15s; border:none; background:transparent; font-family:inherit; }
+  .group-btn.active { background:var(--bg2); color:var(--text1); box-shadow:0 1px 4px rgba(0,0,0,0.3); }
+  .debt-cap-section { margin-top:12px; padding-top:12px; border-top:1px solid var(--border); }
+  .debt-cap-row { display:flex; justify-content:space-between; align-items:center; margin-bottom:5px; font-size:12px; }
+  .debt-cap-bar-wrap { background:var(--bg3); border-radius:6px; height:5px; margin-bottom:7px; }
+  .debt-cap-bar { height:5px; border-radius:6px; transition:width 0.6s; }
+  .budget-line { position:relative; }
+  .budget-limit-marker { position:absolute; top:0; bottom:0; width:2px; border-radius:2px; background:var(--yellow); opacity:0.7; }
+  .budget-over .cat-val { color:var(--red) !important; }
 
   /* LAYOUT */
   .grid-2 { display:grid; grid-template-columns:1.55fr 1fr; gap:16px; margin-bottom:16px; }
@@ -234,6 +248,11 @@ window.onerror = function(msg, src, line) {
     <span id="mobile-view-title">ФинТрекер</span>
   </div>
   <div class="mobile-header-right">
+    <div class="group-toggle" style="transform:scale(0.88);transform-origin:right center">
+      <button class="group-btn active" id="gbtn-all-m"    onclick="setGroup('all')">Всё</button>
+      <button class="group-btn"        id="gbtn-личное-m" onclick="setGroup('личное')">Лич</button>
+      <button class="group-btn"        id="gbtn-работа-m" onclick="setGroup('работа')">Раб</button>
+    </div>
     <select id="monthSelectMobile" onchange="syncMonth('mobile')"></select>
     <div class="mobile-refresh" onclick="forceRefresh()"><i class="ri-refresh-line"></i></div>
   </div>
@@ -277,6 +296,11 @@ window.onerror = function(msg, src, line) {
       <p id="header-subtitle">Загрузка...</p>
     </div>
     <div class="header-right">
+      <div class="group-toggle">
+        <button class="group-btn active" id="gbtn-all"     onclick="setGroup('all')">Всё</button>
+        <button class="group-btn"        id="gbtn-личное"  onclick="setGroup('личное')">Личное</button>
+        <button class="group-btn"        id="gbtn-работа"  onclick="setGroup('работа')">Работа</button>
+      </div>
       <select class="month-selector" id="monthSelect" onchange="syncMonth('desktop')"></select>
       <button class="btn-refresh" onclick="forceRefresh()"><i class="ri-refresh-line"></i> Обновить</button>
     </div>
@@ -290,24 +314,28 @@ window.onerror = function(msg, src, line) {
         <div class="kpi-label">Свободные деньги</div>
         <div class="kpi-value" id="kpi-balance">—</div>
         <div class="kpi-sub" id="kpi-balance-sub"></div>
+        <div class="kpi-delta" id="kpi-balance-delta"></div>
       </div>
       <div class="kpi-card c-purple">
         <div class="kpi-icon-box purple"><i class="ri-line-chart-line"></i></div>
         <div class="kpi-label">Доходы за месяц</div>
         <div class="kpi-value" id="kpi-income">—</div>
         <div class="kpi-sub" id="kpi-income-sub"></div>
+        <div class="kpi-delta" id="kpi-income-delta"></div>
       </div>
       <div class="kpi-card c-red">
         <div class="kpi-icon-box red"><i class="ri-shopping-bag-line"></i></div>
         <div class="kpi-label">Расходы за месяц</div>
         <div class="kpi-value" id="kpi-expenses">—</div>
         <div class="kpi-sub" id="kpi-expenses-sub"></div>
+        <div class="kpi-delta" id="kpi-expenses-delta"></div>
       </div>
       <div class="kpi-card c-yellow">
         <div class="kpi-icon-box yellow"><i class="ri-bank-line"></i></div>
         <div class="kpi-label">Долги</div>
         <div class="kpi-value" id="kpi-debts">—</div>
         <div class="kpi-sub" id="kpi-debts-sub"></div>
+        <div class="kpi-delta" id="kpi-debts-delta"></div>
       </div>
     </div>
     <div class="grid-2">
@@ -335,6 +363,7 @@ window.onerror = function(msg, src, line) {
         <div class="card-title">Долги</div>
         <div id="debt-list-dash"></div>
         <div class="total-row"><span class="total-label">Общий долг</span><span class="total-val" id="debt-total-dash">—</span></div>
+        <div id="debt-capacity-dash"></div>
       </div>
       <div class="card">
         <div class="card-title">Последние операции</div>
@@ -408,6 +437,50 @@ const DATA_URL = './data.json';
 let lineChartInst = null, donutChartInst = null;
 let allData = null;
 let currentView = 'dashboard';
+let currentGroup = 'all'; // 'all' | 'личное' | 'работа'
+
+function setGroup(g) {
+  currentGroup = g;
+  ['all','личное','работа'].forEach(k => {
+    const a = document.getElementById('gbtn-' + k);
+    const b = document.getElementById('gbtn-' + k + '-m');
+    if (a) a.classList.toggle('active', k === g);
+    if (b) b.classList.toggle('active', k === g);
+  });
+  if (allData) {
+    const month = document.getElementById('monthSelect').value;
+    renderDashboard(month);
+    if (currentView !== 'dashboard') renderView(currentView);
+  }
+}
+
+function filterByGroup(ops) {
+  if (currentGroup === 'all') return ops;
+  return ops.filter(o => (o.group || '').toLowerCase() === currentGroup);
+}
+
+function prevMonth(monthKey) {
+  const [y, m] = monthKey.split('-').map(Number);
+  const d = new Date(y, m - 2, 1);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function sameMonthPrevYear(monthKey) {
+  const [y, m] = monthKey.split('-');
+  return (parseInt(y) - 1) + '-' + m;
+}
+
+function renderDelta(elId, cur, prev, lowerIsBetter) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  if (!prev || prev === 0) { el.innerHTML = ''; return; }
+  const pct = Math.round((cur - prev) / Math.abs(prev) * 100);
+  if (pct === 0) { el.className = 'kpi-delta same'; el.innerHTML = '→ без изменений'; return; }
+  const isUp = pct > 0;
+  const isGood = lowerIsBetter ? !isUp : isUp;
+  el.className = 'kpi-delta ' + (isGood ? 'up' : 'down');
+  el.innerHTML = (isUp ? '↑' : '↓') + ' ' + Math.abs(pct) + '% vs прошлый месяц';
+}
 
 const CAT_CONFIG = {
   'Материалы':        { icon:'ri-hammer-line',             color:'#3b82f6', grad:['#2563eb','#3b82f6'], cls:'work'   },
@@ -423,6 +496,7 @@ const CAT_CONFIG = {
   'Развлечения':      { icon:'ri-gamepad-line',            color:'#06b6d4', grad:['#0e7490','#06b6d4'], cls:'other'  },
   'Заказ':            { icon:'ri-briefcase-line',          color:'#00c49a', grad:['#00997a','#00c49a'], cls:'income' },
   'Прочий доход':     { icon:'ri-money-dollar-circle-line',color:'#7e5bef', grad:['#6d28d9','#7e5bef'], cls:'income' },
+  'Компенсация':      { icon:'ri-refund-2-line',           color:'#00c49a', grad:['#00997a','#00c49a'], cls:'income' },
   'Прочее':           { icon:'ri-more-line',               color:'#5a5a5a', grad:['#3a3a3a','#5a5a5a'], cls:'other'  },
 };
 const DEBT_ICONS = {
@@ -479,7 +553,7 @@ function switchView(view) {
 
 function renderView(view) {
   const month = document.getElementById('monthSelect').value;
-  const ops = allData.operations.filter(o => toYYYYMM(o.date) === month);
+  const ops = filterByGroup(allData.operations.filter(o => toYYYYMM(o.date) === month));
   const debts = allData.debts.filter(d => d.status === 'активный');
 
   if (view === 'income')     renderIncomeView(ops);
@@ -534,7 +608,7 @@ function showError(msg) {
 }
 
 async function fetchAPI() {
- const res = await fetch(DATA_URL + '?t=' + Date.now());
+  const res = await fetch(DATA_URL + '?t=' + Date.now());
   if (!res.ok) throw new Error('HTTP ' + res.status);
   return res.json();
 }
@@ -584,39 +658,86 @@ function syncMonth(from) {
 
 // ── DASHBOARD ──
 function renderDashboard(monthKey) {
-  const ops = allData.operations.filter(o => toYYYYMM(o.date) === monthKey);
+  const allOps = allData.operations.filter(o => toYYYYMM(o.date) === monthKey);
+  const ops = filterByGroup(allOps);
   const debts = allData.debts.filter(d => d.status === 'активный');
-  const incOps = ops.filter(o => o.type==='доход');
-  const expOps = ops.filter(o => o.type==='расход');
-  const totalInc = incOps.reduce((s,o)=>s+Number(o.amount),0);
-  const totalExp = expOps.reduce((s,o)=>s+Number(o.amount),0);
-  const totalDebt = debts.reduce((s,d)=>s+Number(d.remaining),0);
 
-  document.getElementById('kpi-balance').textContent  = fmt(totalInc-totalExp);
+  const incOps = ops.filter(o => o.type === 'доход' || o.type === 'компенсация');
+  const expOps = ops.filter(o => o.type === 'расход');
+  const compOps = ops.filter(o => o.type === 'компенсация');
+  const totalInc = incOps.reduce((s,o) => s + Number(o.amount), 0);
+  const totalExp = expOps.reduce((s,o) => s + Number(o.amount), 0);
+  const totalComp = compOps.reduce((s,o) => s + Number(o.amount), 0);
+  const totalDebt = debts.reduce((s,d) => s + Number(d.remaining), 0);
+  const balance = totalInc - totalExp;
+
+  // Предыдущий месяц для дельты
+  const prevKey = prevMonth(monthKey);
+  const prevOps = filterByGroup(allData.operations.filter(o => toYYYYMM(o.date) === prevKey));
+  const prevInc = prevOps.filter(o => o.type==='доход'||o.type==='компенсация').reduce((s,o)=>s+Number(o.amount),0);
+  const prevExp = prevOps.filter(o => o.type==='расход').reduce((s,o)=>s+Number(o.amount),0);
+  const prevBal = prevInc - prevExp;
+
+  document.getElementById('kpi-balance').textContent  = fmt(balance);
   document.getElementById('kpi-income').textContent   = fmt(totalInc);
   document.getElementById('kpi-expenses').textContent = fmt(totalExp);
   document.getElementById('kpi-debts').textContent    = fmt(totalDebt);
-  document.getElementById('kpi-income-sub').textContent   = incOps.length+' операций';
-  document.getElementById('kpi-expenses-sub').textContent = expOps.length+' операций';
-  document.getElementById('kpi-debts-sub').textContent    = debts.length+' кредитора';
-  document.getElementById('kpi-balance-sub').textContent  = totalInc>=totalExp?'доходы превышают расходы':'расходы превышают доходы';
-  document.getElementById('header-subtitle').textContent = 'Обновлено только что · '+monthLabel(monthKey);
-  document.getElementById('chart-period').textContent = monthLabel(monthKey);
+  document.getElementById('kpi-income-sub').textContent   = incOps.length + ' операций';
+  document.getElementById('kpi-expenses-sub').textContent = expOps.length + ' операций' + (totalComp > 0 ? ' · компенс. ' + fmt(totalComp) : '');
+  document.getElementById('kpi-debts-sub').textContent    = debts.length + ' кредитора';
+  document.getElementById('kpi-balance-sub').textContent  = balance >= 0 ? 'доходы превышают расходы' : 'расходы превышают доходы';
+  document.getElementById('header-subtitle').textContent  = 'Обновлено только что · ' + monthLabel(monthKey);
+  document.getElementById('chart-period').textContent     = monthLabel(monthKey);
 
-  const catMap={};
-  expOps.forEach(o=>{ const c=o.category||'Прочее'; catMap[c]=(catMap[c]||0)+Number(o.amount); });
-  const cats = Object.entries(catMap).sort((a,b)=>b[1]-a[1]);
+  renderDelta('kpi-balance-delta',  balance,   prevBal,  false);
+  renderDelta('kpi-income-delta',   totalInc,  prevInc,  false);
+  renderDelta('kpi-expenses-delta', totalExp,  prevExp,  true);
+  // Долг не меняется по месяцам — показываем покрытие
+  const debtEl = document.getElementById('kpi-debts-delta');
+  if (debtEl) {
+    if (totalDebt === 0) {
+      debtEl.className = 'kpi-delta up'; debtEl.innerHTML = '✓ нет долгов';
+    } else if (balance >= totalDebt) {
+      debtEl.className = 'kpi-delta up'; debtEl.innerHTML = '✓ хватит закрыть всё';
+    } else {
+      const pct = Math.round(balance / totalDebt * 100);
+      debtEl.className = 'kpi-delta ' + (pct > 50 ? 'same' : 'down');
+      debtEl.innerHTML = '⚡ покрывает ' + pct + '% долга';
+    }
+  }
+
+  const catMap = {};
+  expOps.forEach(o => { const c = o.category || 'Прочее'; catMap[c] = (catMap[c] || 0) + Number(o.amount); });
+  const cats = Object.entries(catMap).sort((a,b) => b[1] - a[1]);
 
   renderCategoryBars(cats, totalExp);
   renderDonut(cats, totalExp);
-  renderLineChart(ops, monthKey);
+  renderLineChart(allOps, monthKey);
   renderDebtList(debts, totalDebt, 'debt-list-dash', 'debt-total-dash');
-  renderTxList([...ops].sort((a,b)=>(b.date||'').localeCompare(a.date||'')).slice(0,10), 'tx-list-dash');
+  renderDebtCapacity(debts, totalDebt, totalInc, balance);
+  renderTxList([...ops].sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0, 10), 'tx-list-dash');
+}
+
+function renderDebtCapacity(debts, totalDebt, monthlyIncome, freeBalance) {
+  const el = document.getElementById('debt-capacity-dash');
+  if (!el || !debts.length) { if(el) el.innerHTML=''; return; }
+  const dtiPct = monthlyIncome > 0 ? Math.round(totalDebt / monthlyIncome * 100) : 0;
+  const monthsTo = monthlyIncome > 0 && totalDebt > 0 ? Math.ceil(totalDebt / (monthlyIncome * 0.3)) : null;
+  const color = dtiPct > 300 ? 'var(--red)' : dtiPct > 150 ? 'var(--yellow)' : 'var(--teal)';
+  const status = dtiPct > 300 ? '⚠️ высокая' : dtiPct > 150 ? '⚡ умеренная' : '✓ норма';
+  el.innerHTML =
+    '<div class="debt-cap-section">' +
+    '<div class="debt-cap-row"><span style="color:var(--text3);font-size:12px">Нагрузка: долг/доход месяца</span>' +
+    '<span style="color:' + color + ';font-size:12px;font-weight:600">' + dtiPct + '% — ' + status + '</span></div>' +
+    '<div class="debt-cap-bar-wrap"><div class="debt-cap-bar" style="width:' + Math.min(dtiPct / 3, 100) + '%;background:' + color + '"></div></div>' +
+    '<div style="font-size:11px;color:var(--text3)">Свободных: ' + fmt(freeBalance) + ' · Долг: ' + fmt(totalDebt) +
+    (monthsTo ? ' · ~' + monthsTo + ' мес. до погашения' : '') + '</div>' +
+    '</div>';
 }
 
 // ── INCOME VIEW ──
 function renderIncomeView(ops) {
-  const list = ops.filter(o=>o.type==='доход').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const list = ops.filter(o=>o.type==='доход'||o.type==='компенсация').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const total = list.reduce((s,o)=>s+Number(o.amount),0);
   document.getElementById('income-total').textContent = fmt(total);
   document.getElementById('income-count').textContent = list.length+' операций';
@@ -664,9 +785,14 @@ function renderCatBarsInto(cats, total, elId, totalColor) {
   const el = document.getElementById(elId);
   if (!cats.length) { el.innerHTML='<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Нет данных</div>'; return; }
   const maxVal = cats[0][1];
-  let html = cats.map(([name,val])=>{
-    const cfg=getCat(name), pct=Math.round(val/maxVal*100);
-    return `<div class="cat-item"><div class="cat-header"><span class="cat-name-wrap"><i class="${cfg.icon}" style="color:${cfg.color}"></i> ${name}</span><span class="cat-val">${fmt(val)}</span></div><div class="cat-bar-wrap"><div class="cat-bar" style="width:${pct}%;background:linear-gradient(90deg,${cfg.grad[0]},${cfg.grad[1]})"></div></div></div>`;
+  const budgets = (allData.budgets || []);
+  let html = cats.map(([name, val]) => {
+    const cfg = getCat(name), pct = Math.round(val / maxVal * 100);
+    const bud = budgets.find(b => b.category === name);
+    const isOver = bud && val > bud.limit;
+    const budMarker = bud ? `<div class="budget-limit-marker" style="left:${Math.min(Math.round(bud.limit/maxVal*100),100)}%"></div>` : '';
+    const budNote = bud ? `<span style="font-size:10px;color:${isOver?'var(--red)':'var(--text3)'};margin-left:4px">${isOver?'⚠️':''}лимит ${fmt(bud.limit)}</span>` : '';
+    return `<div class="cat-item${isOver?' budget-over':''}"><div class="cat-header"><span class="cat-name-wrap"><i class="${cfg.icon}" style="color:${cfg.color}"></i> ${name}${budNote}</span><span class="cat-val">${fmt(val)}</span></div><div class="cat-bar-wrap budget-line"><div class="cat-bar" style="width:${pct}%;background:linear-gradient(90deg,${cfg.grad[0]},${cfg.grad[1]})"></div>${budMarker}</div></div>`;
   }).join('');
   html += `<div class="total-row"><span class="total-label">Итого</span><span class="total-val" style="color:${totalColor}">${fmt(total)}</span></div>`;
   el.innerHTML = html;
@@ -705,21 +831,47 @@ function renderDonut(cats, total) {
 }
 
 function renderLineChart(ops, monthKey) {
-  if (typeof Chart === 'undefined') return; // Chart.js ещё не загружен
-  const[y,m]=monthKey.split('-').map(Number);
-  const days=new Date(y,m,0).getDate();
-  const inc=new Array(days).fill(0), exp=new Array(days).fill(0);
-  ops.forEach(o=>{ const d=parseDate(o.date); if(!d)return; const i=d.getDate()-1; if(i<0||i>=days)return; if(o.type==='доход')inc[i]+=Number(o.amount); else exp[i]+=Number(o.amount); });
-  let ci=0,ce=0;
-  const icm=inc.map(v=>ci+=v), ecm=exp.map(v=>ce+=v);
-  if(lineChartInst) lineChartInst.destroy();
-  lineChartInst = new Chart(document.getElementById('lineChart').getContext('2d'),{
+  if (typeof Chart === 'undefined') return;
+  const [y, m] = monthKey.split('-').map(Number);
+  const days = new Date(y, m, 0).getDate();
+
+  const inc = new Array(days).fill(0), exp = new Array(days).fill(0);
+  ops.forEach(o => {
+    const d = parseDate(o.date); if (!d) return;
+    const i = d.getDate() - 1; if (i < 0 || i >= days) return;
+    if (o.type === 'доход' || o.type === 'компенсация') inc[i] += Number(o.amount);
+    else if (o.type === 'расход') exp[i] += Number(o.amount);
+  });
+  let ci = 0, ce = 0;
+  const icm = inc.map(v => ci += v), ecm = exp.map(v => ce += v);
+
+  // Прошлый год — тот же месяц
+  const pyKey = sameMonthPrevYear(monthKey);
+  const pyOps = filterByGroup(allData.operations.filter(o => toYYYYMM(o.date) === pyKey));
+  const pyInc = new Array(days).fill(0), pyExp = new Array(days).fill(0);
+  pyOps.forEach(o => {
+    const d = parseDate(o.date); if (!d) return;
+    const i = d.getDate() - 1; if (i < 0 || i >= days) return;
+    if (o.type === 'доход' || o.type === 'компенсация') pyInc[i] += Number(o.amount);
+    else if (o.type === 'расход') pyExp[i] += Number(o.amount);
+  });
+  let pci = 0;
+  const pyIcm = pyInc.map(v => pci += v);
+  const hasPrevYear = pyOps.length > 0;
+
+  const datasets = [
+    {label:'Доходы',data:icm,borderColor:'#00c49a',backgroundColor:'rgba(0,196,154,0.1)',borderWidth:2.5,pointRadius:0,pointHoverRadius:5,tension:0.45,fill:true},
+    {label:'Расходы',data:ecm,borderColor:'#ff4d4f',backgroundColor:'rgba(255,77,79,0.07)',borderWidth:2.5,pointRadius:0,pointHoverRadius:5,tension:0.45,fill:true},
+  ];
+  if (hasPrevYear) {
+    datasets.push({label:'Доходы пр.год',data:pyIcm,borderColor:'#00c49a',backgroundColor:'transparent',borderWidth:1.5,borderDash:[4,4],pointRadius:0,tension:0.45,fill:false});
+  }
+
+  if (lineChartInst) lineChartInst.destroy();
+  lineChartInst = new Chart(document.getElementById('lineChart').getContext('2d'), {
     type:'line',
-    data:{ labels:Array.from({length:days},(_,i)=>i+1), datasets:[
-      {label:'Доходы',data:icm,borderColor:'#00c49a',backgroundColor:'rgba(0,196,154,0.1)',borderWidth:2.5,pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:'#00c49a',tension:0.45,fill:true},
-      {label:'Расходы',data:ecm,borderColor:'#ff4d4f',backgroundColor:'rgba(255,77,79,0.07)',borderWidth:2.5,pointRadius:0,pointHoverRadius:5,pointHoverBackgroundColor:'#ff4d4f',tension:0.45,fill:true}
-    ]},
-    options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:{labels:{color:'#b3b3b3',boxWidth:10,boxHeight:10,borderRadius:3,useBorderRadius:true,font:{size:12,family:'Rubik'}}}, tooltip:{backgroundColor:'#1e1e1e',borderColor:'#2a2a2a',borderWidth:1,titleColor:'#fff',bodyColor:'#b3b3b3',padding:12,callbacks:{title:i=>`День ${i[0].label}`,label:ctx=>` ${ctx.dataset.label}: ₽ ${ctx.raw.toLocaleString('ru')}`}} }, scales:{ x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#5a5a5a',font:{size:11,family:'Rubik'},maxTicksLimit:8}}, y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#5a5a5a',font:{size:11,family:'Rubik'},callback:v=>'₽'+(v/1000).toFixed(0)+'k'}} } }
+    data:{ labels:Array.from({length:days},(_,i)=>i+1), datasets },
+    options:{ responsive:true, interaction:{mode:'index',intersect:false}, plugins:{ legend:{labels:{color:'#b3b3b3',boxWidth:10,boxHeight:10,borderRadius:3,useBorderRadius:true,font:{size:12}}}, tooltip:{backgroundColor:'#1e1e1e',borderColor:'#2a2a2a',borderWidth:1,titleColor:'#fff',bodyColor:'#b3b3b3',padding:12,callbacks:{title:i=>`День ${i[0].label}`,label:ctx=>` ${ctx.dataset.label}: ₽ ${ctx.raw.toLocaleString('ru')}`}} }, scales:{ x:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#5a5a5a',font:{size:11},maxTicksLimit:8}}, y:{grid:{color:'rgba(255,255,255,0.04)'},ticks:{color:'#5a5a5a',font:{size:11},callback:v=>'₽'+(v/1000).toFixed(0)+'k'}} } }
   });
 }
 
@@ -734,14 +886,15 @@ if (chartjsEl) {
   chartjsEl.addEventListener('load', function() {
     if (allData && currentView === 'dashboard') {
       var month = document.getElementById('monthSelect').value;
-      var ops = allData.operations.filter(function(o) { return toYYYYMM(o.date) === month; });
+      var allMonthOps = allData.operations.filter(function(o) { return toYYYYMM(o.date) === month; });
+      var ops = filterByGroup(allMonthOps);
       var expOps = ops.filter(function(o) { return o.type === 'расход'; });
       var catMap = {};
       expOps.forEach(function(o) { var c = o.category || 'Прочее'; catMap[c] = (catMap[c] || 0) + Number(o.amount); });
       var cats = Object.entries(catMap).sort(function(a,b) { return b[1]-a[1]; });
       var total = expOps.reduce(function(s,o) { return s + Number(o.amount); }, 0);
       renderDonut(cats, total);
-      renderLineChart(ops, month);
+      renderLineChart(allMonthOps, month);
     }
   });
 }
