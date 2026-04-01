@@ -435,25 +435,25 @@ window.onerror = function(msg, src, line) {
         <div class="scrollable" id="tx-list-dash"></div>
       </div>
     </div>
-    <div id="work-reimburse-card" class="card" style="margin-top:16px;display:none">
-      <div class="card-title">
-        Рабочие расходы
-        <span id="work-reimburse-badge" style="background:rgba(59,130,246,0.15);color:var(--blue);font-size:11px;padding:3px 8px;border-radius:20px;font-weight:600;text-transform:none;letter-spacing:0"></span>
-      </div>
-      <div class="work-pending-label"><i class="ri-arrow-go-back-line"></i> Ожидаю возврат</div>
-      <div class="work-pending-amount" id="work-pending-amount">—</div>
-      <div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap">
-        <div><div class="kpi-label" style="font-size:11px">Потрачено</div><div style="font-weight:700;font-size:15px;color:var(--red)" id="work-total-spent">—</div></div>
-        <div><div class="kpi-label" style="font-size:11px">Уже получено</div><div style="font-weight:700;font-size:15px;color:var(--teal)" id="work-total-comp">—</div></div>
-      </div>
-      <div id="work-ops-list"></div>
-    </div>
     <div class="card" style="margin-top:16px">
       <div class="card-title">
         Авто-бюджет по категориям
         <span id="budget-rings-note" style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0"></span>
       </div>
       <div id="budget-rings"></div>
+    </div>
+    <div id="work-reimburse-card" class="card" style="margin-top:16px;display:none">
+      <div class="card-title">
+        Рабочие расходы
+        <span id="work-reimburse-badge" style="background:rgba(59,130,246,0.15);color:var(--blue);font-size:11px;padding:3px 8px;border-radius:20px;font-weight:600;text-transform:none;letter-spacing:0"></span>
+      </div>
+      <div class="work-pending-label"><i class="ri-arrow-go-back-line"></i> Ожидаю возврат (все месяцы)</div>
+      <div class="work-pending-amount" id="work-pending-amount">—</div>
+      <div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap">
+        <div><div class="kpi-label" style="font-size:11px">Потрачено</div><div style="font-weight:700;font-size:15px;color:var(--red)" id="work-total-spent">—</div></div>
+        <div><div class="kpi-label" style="font-size:11px">Уже получено</div><div style="font-weight:700;font-size:15px;color:var(--teal)" id="work-total-comp">—</div></div>
+      </div>
+      <div id="work-ops-list"></div>
     </div>
     <div class="grid-2" style="margin-top:16px">
       <div class="card">
@@ -961,7 +961,7 @@ function renderDashboard(monthKey) {
   renderWeeklySpending(ops, monthKey);
   renderPlannedPayments(allData.plans || [], ops, monthKey);
   renderBudgetRings(expOps, monthKey);
-  renderWorkReimbursement(allOps);
+  renderWorkReimbursement(allData.operations);
 }
 
 function renderWeeklySpending(ops, monthKey) {
@@ -989,6 +989,8 @@ function renderWeeklySpending(ops, monthKey) {
   const currentWeek = todayDay <= 7 ? 0 : todayDay <= 14 ? 1 : todayDay <= 21 ? 2 : 3;
 
   el.innerHTML = weeks.map((w, i) => {
+    // Скрываем недели которые ещё не начались в текущем месяце
+    if (isCurrentMonth && i > currentWeek) return '';
     const pct = Math.round(w.total / maxTotal * 100);
     const isCur = isCurrentMonth && i === currentWeek;
     return `<div class="week-item${isCur ? ' week-current' : ''}">` +
@@ -1366,8 +1368,42 @@ async function submitDebt() {
       body: JSON.stringify(payload)
     });
     closeDebtModal();
-    showToast(debtTab === 'pay' ? '✓ Платёж записан! Обновляем...' : '✓ Долг добавлен! Обновляем...');
-    setTimeout(function() { forceRefresh(); }, 800);
+
+    // Оптимистичное обновление — не ждём GitHub Actions (15 мин)
+    if (debtTab === 'pay' && allData) {
+      const payDate = payload.date || new Date().toISOString().split('T')[0];
+      // Добавляем расход в локальные данные чтобы баланс сразу уменьшился
+      allData.operations.push({
+        date: payDate, amount: payload.amount, type: 'расход',
+        group: 'личное', category: 'Долг/кредит',
+        desc: 'Платёж: ' + payload.creditor, source: 'dashboard', order: '', subcategory: ''
+      });
+      // Обновляем долг в списке
+      allData.debts = allData.debts.map(function(d) {
+        if (d.creditor !== payload.creditor) return d;
+        const newPaid = (Number(d.paid) || 0) + payload.amount;
+        const newRem = Math.max((Number(d.initial) || 0) - newPaid, 0);
+        return Object.assign({}, d, { paid: newPaid, remaining: newRem, lastPay: payDate, status: newRem === 0 ? 'закрытый' : d.status });
+      });
+      const curMonth = document.getElementById('monthSelect') ? document.getElementById('monthSelect').value : toYYYYMM(payDate);
+      renderDashboard(curMonth);
+      showToast('✓ Платёж записан');
+    } else if (debtTab === 'add' && allData) {
+      // Добавляем долг локально
+      const dateVal = payload.date || new Date().toISOString().split('T')[0];
+      allData.debts.push({
+        creditor: payload.creditor, type: payload.debtType || 'прочее',
+        initial: payload.initial, paid: payload.paid || 0,
+        remaining: Math.max(payload.initial - (payload.paid || 0), 0),
+        lastPay: dateVal, status: 'активный'
+      });
+      const curMonth = document.getElementById('monthSelect') ? document.getElementById('monthSelect').value : toYYYYMM(dateVal);
+      renderDashboard(curMonth);
+      showToast('✓ Долг добавлен');
+    } else {
+      showToast(debtTab === 'pay' ? '✓ Платёж записан! Обновляем...' : '✓ Долг добавлен! Обновляем...');
+      setTimeout(function() { forceRefresh(); }, 800);
+    }
   } catch(e) {
     alert('Ошибка: ' + e.message);
     btn.disabled = false;
@@ -1393,7 +1429,7 @@ function toggleCatSubs(subId, btn) {
 
 // ── SCRIPT_URL for adding transactions ──
 // Fill in your Google Apps Script Web App URL here:
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzGdZQQi0VJ9Rsn1LekuaiIvg7m6FIIt1SpBfR1t4aE0EnA-msng4FuCM1OSt0dxDIi/exec';
+const SCRIPT_URL = '';
 
 // ── AUTO-BUDGET RINGS ──
 function calcAutoBudgets(allOps, currentMonthKey) {
@@ -1458,12 +1494,12 @@ function renderBudgetRings(expOps, monthKey) {
   document.getElementById('budget-rings-note').textContent = hasHistory ? ('среднее за ' + monthsAvail + ' мес.') : 'нет истории — показана доля от общих расходов';
 }
 
-// ── WORK REIMBURSEMENT ──
-function renderWorkReimbursement(allMonthOps) {
+// ── WORK REIMBURSEMENT (кумулятивно — все месяцы) ──
+function renderWorkReimbursement(allOps) {
   const card = document.getElementById('work-reimburse-card');
   if (!card) return;
-  // Always show ALL work operations regardless of group filter
-  const workOps = allMonthOps.filter(function(o) { return (o.group || '').toLowerCase() === 'работа'; });
+  // Все рабочие операции за всё время
+  const workOps = allOps.filter(function(o) { return (o.group || '').toLowerCase() === 'работа'; });
   const workExp = workOps.filter(function(o) { return o.type === 'расход'; });
   const workComp = workOps.filter(function(o) { return o.type === 'компенсация'; });
   const totalSpent = workExp.reduce(function(s, o) { return s + Number(o.amount); }, 0);
@@ -1476,7 +1512,7 @@ function renderWorkReimbursement(allMonthOps) {
   document.getElementById('work-total-comp').textContent = fmt(totalComp);
   const badge = document.getElementById('work-reimburse-badge');
   if (badge) badge.textContent = workExp.length + ' расх.';
-  // List work expenses
+  // Список — последние 8 рабочих расходов за всё время
   const listEl = document.getElementById('work-ops-list');
   if (listEl) {
     const sorted = [...workExp].sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
