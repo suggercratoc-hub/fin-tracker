@@ -1007,7 +1007,7 @@ function renderPlannedPayments(plans, ops, monthKey) {
   const el = document.getElementById('planned-payments');
   if (!el) return;
   if (!plans || !plans.length) {
-    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Нет данных — нажмите 🔄 для обновления</div>';
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Нет данных — <span onclick="forceRefresh()" style="color:var(--purple-l);cursor:pointer;text-decoration:underline">обновить</span></div>';
     return;
   }
   const [y, m] = monthKey.split('-').map(Number);
@@ -1260,6 +1260,39 @@ function forceRefresh() {
   loadData();
 }
 
+// Поллинг после записи — ждём пока data.json изменится (GitHub Actions ~20с)
+var _pollTimer = null;
+function startPollingForUpdate() {
+  if (_pollTimer) return; // уже запущен
+  // Запоминаем текущую «подпись» данных чтобы сравнить
+  const snapshot = allData ? JSON.stringify(allData.operations.length + '_' + (allData.operations[allData.operations.length - 1] || {}).date) : '';
+  var attempts = 0;
+  var maxAttempts = 20; // максимум 60 секунд (20 × 3с)
+  _pollTimer = setInterval(async function() {
+    attempts++;
+    if (attempts > maxAttempts) {
+      clearInterval(_pollTimer); _pollTimer = null;
+      return;
+    }
+    try {
+      const res = await fetch(DATA_URL + '?t=' + Date.now());
+      if (!res.ok) return;
+      const fresh = await res.json();
+      const freshSnap = JSON.stringify(fresh.operations.length + '_' + (fresh.operations[fresh.operations.length - 1] || {}).date);
+      if (freshSnap !== snapshot) {
+        // Данные изменились — обновляем
+        clearInterval(_pollTimer); _pollTimer = null;
+        try { localStorage.removeItem(CACHE_KEY); } catch(e) {}
+        allData = fresh;
+        setCache(fresh);
+        const curMonth = document.getElementById('monthSelect') ? document.getElementById('monthSelect').value : '';
+        if (curMonth) renderDashboard(curMonth);
+        showToast('✓ Данные синхронизированы');
+      }
+    } catch(e) {}
+  }, 3000);
+}
+
 // Дорисовываем графики когда Chart.js загрузится (если данные уже были в кэше)
 var chartjsEl = document.getElementById('chartjs-script');
 if (chartjsEl) {
@@ -1399,10 +1432,8 @@ async function submitDebt() {
       });
       const curMonth = document.getElementById('monthSelect') ? document.getElementById('monthSelect').value : toYYYYMM(payDate);
       renderDashboard(curMonth);
-      // Помечаем баланс как "ожидает синхронизации" — данные обновятся через ~15 мин
-      const subEl = document.getElementById('kpi-balance-sub');
-      if (subEl) subEl.innerHTML += ' <span style="color:var(--yellow);font-size:10px">⏳ синхр.</span>';
-      showToast('✓ Платёж записан · баланс обновится через ~15 мин');
+      showToast('✓ Платёж записан');
+      startPollingForUpdate();
     } else if (debtTab === 'add' && allData) {
       // Добавляем долг локально
       const dateVal = payload.date || new Date().toISOString().split('T')[0];
@@ -1416,9 +1447,9 @@ async function submitDebt() {
       renderDashboard(curMonth);
       showToast('✓ Долг добавлен');
     } else {
-      showToast(debtTab === 'pay' ? '✓ Платёж записан! Обновляем...' : '✓ Долг добавлен! Обновляем...');
-      setTimeout(function() { forceRefresh(); }, 800);
+      showToast(debtTab === 'pay' ? '✓ Платёж записан' : '✓ Долг добавлен');
     }
+    startPollingForUpdate();
   } catch(e) {
     alert('Ошибка: ' + e.message);
     btn.disabled = false;
@@ -1649,9 +1680,27 @@ async function submitExpense() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    closeAddExpense();
-    showToast(_editingOp ? '✓ Изменено! Обновляем...' : '✓ Добавлено! Обновление через ~15 мин.');
-    setTimeout(function() { forceRefresh(); }, 800);
+    // Оптимистичное обновление — не делаем авторефреш (он откатит данные до обновления Actions)
+    if (allData) {
+      const curMonth = document.getElementById('monthSelect') ? document.getElementById('monthSelect').value : toYYYYMM(date);
+      if (_editingOp) {
+        // Редактирование: заменяем операцию в локальных данных
+        const idx = allData.operations.findIndex(function(o) {
+          return o.date === _editingOp.date && Number(o.amount) === Number(_editingOp.amount) && o.category === _editingOp.category;
+        });
+        if (idx !== -1) allData.operations[idx] = Object.assign({}, allData.operations[idx], { date, amount, type, group, category, desc, subcategory: subcat });
+      } else {
+        // Новая операция: добавляем локально
+        allData.operations.push({ date, amount, type, group, category, desc, source: 'dashboard', order: '', subcategory: subcat });
+      }
+      closeAddExpense();
+      renderDashboard(curMonth);
+      showToast(_editingOp ? '✓ Изменено' : '✓ Добавлено');
+    } else {
+      closeAddExpense();
+      showToast(_editingOp ? '✓ Изменено' : '✓ Добавлено');
+    }
+    startPollingForUpdate();
   } catch(e) {
     alert('Ошибка: ' + e.message);
     btn.disabled = false;
