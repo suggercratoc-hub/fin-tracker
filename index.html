@@ -239,6 +239,40 @@ initTelegram();
     .card { padding:16px; border-radius:12px; }
     .scrollable { max-height:none; }
   }
+  /* BUDGET RINGS */
+  .rings-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(128px,1fr)); gap:16px; }
+  .ring-item { display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .ring-svg-wrap { position:relative; width:88px; height:88px; }
+  .ring-svg-wrap svg { transform:rotate(-90deg); }
+  .ring-label-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; pointer-events:none; }
+  .ring-pct { font-size:15px; font-weight:700; line-height:1; }
+  .ring-cat-name { font-size:11px; color:var(--text2); font-weight:500; text-align:center; max-width:120px; }
+  .ring-cat-val { font-size:10px; color:var(--text3); text-align:center; }
+  /* WORK REIMBURSEMENT */
+  .work-card-total { font-size:22px; font-weight:700; color:var(--blue); margin:2px 0 14px; }
+  .work-pending-label { font-size:12px; color:var(--text3); display:flex; align-items:center; gap:6px; }
+  .work-pending-amount { font-size:18px; font-weight:700; color:var(--teal); margin:2px 0 14px; }
+  /* FAB */
+  .fab { position:fixed; bottom:calc(80px + env(safe-area-inset-bottom,0px)); right:16px; width:52px; height:52px; background:linear-gradient(135deg,var(--purple),var(--teal)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:26px; color:#fff; box-shadow:0 4px 20px rgba(126,91,239,0.45); cursor:pointer; z-index:90; transition:transform 0.18s; border:none; }
+  .fab:active { transform:scale(0.9); }
+  @media(min-width:769px){ .fab { bottom:28px; } }
+  /* MODAL */
+  .modal-backdrop { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.65); z-index:300; align-items:flex-end; justify-content:center; }
+  .modal-backdrop.open { display:flex; }
+  .modal-sheet { background:var(--bg2); border-radius:24px 24px 0 0; padding:20px 20px calc(24px + env(safe-area-inset-bottom,0px)); width:100%; max-width:500px; animation:slideUp 0.22s ease; }
+  @keyframes slideUp { from{transform:translateY(100%)} to{transform:translateY(0)} }
+  .modal-handle { width:36px; height:4px; background:var(--border); border-radius:4px; margin:0 auto 18px; }
+  .modal-title { font-size:17px; font-weight:700; margin-bottom:16px; }
+  .form-row { margin-bottom:12px; }
+  .form-row-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+  .form-label { font-size:11px; color:var(--text3); margin-bottom:4px; display:block; text-transform:uppercase; letter-spacing:0.5px; font-weight:500; }
+  .form-input { width:100%; background:var(--bg3); border:1px solid var(--border); color:var(--text1); padding:10px 12px; border-radius:10px; font-size:14px; font-family:inherit; outline:none; -webkit-appearance:none; }
+  .form-input:focus { border-color:var(--purple); }
+  .btn-submit { width:100%; background:linear-gradient(135deg,var(--purple),var(--teal)); color:#fff; border:none; padding:14px; border-radius:12px; font-size:15px; font-weight:600; cursor:pointer; font-family:inherit; margin-top:6px; }
+  .btn-submit:disabled { opacity:0.5; cursor:not-allowed; }
+  .btn-cancel { width:100%; background:transparent; color:var(--text3); border:none; padding:10px; font-size:14px; cursor:pointer; font-family:inherit; margin-top:2px; }
+  .toast { position:fixed; bottom:calc(90px + env(safe-area-inset-bottom,0px)); left:50%; transform:translateX(-50%) translateY(20px); background:#1e1e1e; border:1px solid #2a2a2a; color:#fff; padding:10px 20px; border-radius:12px; font-size:13px; z-index:400; opacity:0; transition:all 0.3s; pointer-events:none; white-space:nowrap; }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
 </head>
 <body>
@@ -392,6 +426,26 @@ window.onerror = function(msg, src, line) {
         <div class="scrollable" id="tx-list-dash"></div>
       </div>
     </div>
+    <div id="work-reimburse-card" class="card" style="margin-top:16px;display:none">
+      <div class="card-title">
+        Рабочие расходы
+        <span id="work-reimburse-badge" style="background:rgba(59,130,246,0.15);color:var(--blue);font-size:11px;padding:3px 8px;border-radius:20px;font-weight:600;text-transform:none;letter-spacing:0"></span>
+      </div>
+      <div class="work-pending-label"><i class="ri-arrow-go-back-line"></i> Ожидаю возврат</div>
+      <div class="work-pending-amount" id="work-pending-amount">—</div>
+      <div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap">
+        <div><div class="kpi-label" style="font-size:11px">Потрачено</div><div style="font-weight:700;font-size:15px;color:var(--red)" id="work-total-spent">—</div></div>
+        <div><div class="kpi-label" style="font-size:11px">Уже получено</div><div style="font-weight:700;font-size:15px;color:var(--teal)" id="work-total-comp">—</div></div>
+      </div>
+      <div id="work-ops-list"></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-title">
+        Авто-бюджет по категориям
+        <span id="budget-rings-note" style="font-size:11px;color:var(--text3);font-weight:400;text-transform:none;letter-spacing:0"></span>
+      </div>
+      <div id="budget-rings"></div>
+    </div>
     <div class="grid-2" style="margin-top:16px">
       <div class="card">
         <div class="card-title">Расходы по неделям</div>
@@ -462,6 +516,71 @@ window.onerror = function(msg, src, line) {
   </div>
 
 </main>
+
+<!-- FAB + MODAL -->
+<button class="fab" onclick="openAddExpense()" title="Добавить операцию"><i class="ri-add-line"></i></button>
+
+<div class="modal-backdrop" id="addExpenseModal" onclick="if(event.target===this)closeAddExpense()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Новая операция</div>
+    <div class="form-row">
+      <label class="form-label">Дата</label>
+      <input class="form-input" type="date" id="ae-date">
+    </div>
+    <div class="form-row-2">
+      <div>
+        <label class="form-label">Тип</label>
+        <select class="form-input" id="ae-type">
+          <option value="расход">Расход</option>
+          <option value="доход">Доход</option>
+          <option value="компенсация">Компенсация</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Группа</label>
+        <select class="form-input" id="ae-group">
+          <option value="личное">Личное</option>
+          <option value="работа">Работа</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Сумма, ₽</label>
+      <input class="form-input" type="number" id="ae-amount" placeholder="0" inputmode="decimal" min="0" step="any">
+    </div>
+    <div class="form-row-2">
+      <div>
+        <label class="form-label">Категория</label>
+        <select class="form-input" id="ae-category">
+          <option>Еда</option>
+          <option>Бензин</option>
+          <option>Материалы</option>
+          <option>Жильё</option>
+          <option>Транспорт</option>
+          <option>Инструмент</option>
+          <option>Расходники</option>
+          <option>Здоровье</option>
+          <option>Одежда</option>
+          <option>Развлечения</option>
+          <option>Заказ</option>
+          <option>Прочее</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label">Подкатегория</label>
+        <input class="form-input" type="text" id="ae-subcat" placeholder="Необязательно">
+      </div>
+    </div>
+    <div class="form-row">
+      <label class="form-label">Описание</label>
+      <input class="form-input" type="text" id="ae-desc" placeholder="Необязательно">
+    </div>
+    <button class="btn-submit" id="ae-submit" onclick="submitExpense()">Добавить в таблицу</button>
+    <button class="btn-cancel" onclick="closeAddExpense()">Отмена</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
 
 <script>
 const DATA_URL = './data.json';
@@ -750,6 +869,8 @@ function renderDashboard(monthKey) {
   renderTxList([...ops].sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0, 10), 'tx-list-dash');
   renderWeeklySpending(ops, monthKey);
   renderPlannedPayments(allData.plans || [], ops, monthKey);
+  renderBudgetRings(expOps, monthKey);
+  renderWorkReimbursement(allOps);
 }
 
 function renderWeeklySpending(ops, monthKey) {
@@ -1028,6 +1149,162 @@ if (chartjsEl) {
       renderLineChart(allMonthOps, month);
     }
   });
+}
+
+// ── SCRIPT_URL for adding transactions ──
+// Fill in your Google Apps Script Web App URL here:
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxbmywTdGf5KDFD7Tp9Xns_fSvcqXG4cabmX8S5XaPkFQgOjn1Y1waSA0HihZ86mgD-/exec';
+
+// ── AUTO-BUDGET RINGS ──
+function calcAutoBudgets(allOps, currentMonthKey) {
+  const months = [];
+  let mk = currentMonthKey;
+  for (let i = 0; i < 3; i++) { mk = prevMonth(mk); months.push(mk); }
+  const catTotals = {};
+  months.forEach(function(mkey) {
+    const mOps = allOps.filter(function(o) { return toYYYYMM(o.date) === mkey && o.type === 'расход'; });
+    const catMap = {};
+    mOps.forEach(function(o) { const c = o.category || 'Прочее'; catMap[c] = (catMap[c] || 0) + Number(o.amount); });
+    Object.entries(catMap).forEach(function([c, v]) { if (!catTotals[c]) catTotals[c] = []; catTotals[c].push(v); });
+  });
+  const result = {};
+  Object.entries(catTotals).forEach(function([c, vals]) { result[c] = Math.round(vals.reduce(function(s, v) { return s + v; }, 0) / vals.length); });
+  return result;
+}
+
+function renderBudgetRings(expOps, monthKey) {
+  const el = document.getElementById('budget-rings');
+  if (!el) return;
+  const allOps = allData.operations;
+  const avgBudgets = calcAutoBudgets(allOps, monthKey);
+  if (!Object.keys(avgBudgets).length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Нужен хотя бы 1 предыдущий месяц для расчёта</div>';
+    document.getElementById('budget-rings-note').textContent = '';
+    return;
+  }
+  const curMap = {};
+  expOps.forEach(function(o) { const c = o.category || 'Прочее'; curMap[c] = (curMap[c] || 0) + Number(o.amount); });
+  const allCats = Array.from(new Set(Object.keys(curMap).concat(Object.keys(avgBudgets)))).filter(function(c) { return (avgBudgets[c] || 0) > 0 || (curMap[c] || 0) > 0; });
+  const sortedCats = allCats.sort(function(a, b) { return (curMap[b] || 0) - (curMap[a] || 0); });
+  const R = 36, SW = 7, C = 2 * Math.PI * R;
+  const html = sortedCats.map(function(cat) {
+    const cur = curMap[cat] || 0, avg = avgBudgets[cat] || cur || 1;
+    const pct = Math.min(Math.round(cur / avg * 100), 150);
+    const fill = Math.min(pct / 100, 1) * C;
+    const cfg = getCat(cat);
+    const ringColor = pct > 100 ? 'var(--red)' : pct > 80 ? 'var(--yellow)' : cfg.color;
+    return '<div class="ring-item">' +
+      '<div class="ring-svg-wrap"><svg viewBox="0 0 88 88" width="88" height="88">' +
+      '<circle cx="44" cy="44" r="' + R + '" fill="none" stroke="var(--bg3)" stroke-width="' + SW + '"/>' +
+      '<circle cx="44" cy="44" r="' + R + '" fill="none" stroke="' + ringColor + '" stroke-width="' + SW + '"' +
+      ' stroke-dasharray="' + fill.toFixed(1) + ' ' + C.toFixed(1) + '" stroke-linecap="round"' +
+      ' style="transition:stroke-dasharray 0.7s ease"/></svg>' +
+      '<div class="ring-label-center"><div class="ring-pct" style="color:' + ringColor + '">' + pct + '%</div>' +
+      (pct > 100 ? '<div style="font-size:8px">⚠️</div>' : '') + '</div></div>' +
+      '<div class="ring-cat-name"><i class="' + cfg.icon + '" style="color:' + cfg.color + '"></i> ' + cat + '</div>' +
+      '<div class="ring-cat-val">' + fmt(cur) + ' / ' + fmt(avg) + '</div>' +
+      '</div>';
+  }).join('');
+  el.innerHTML = '<div class="rings-grid">' + html + '</div>';
+  const monthsAvail = [prevMonth(monthKey), prevMonth(prevMonth(monthKey)), prevMonth(prevMonth(prevMonth(monthKey)))].filter(function(m) { return allOps.some(function(o) { return toYYYYMM(o.date) === m; }); }).length;
+  document.getElementById('budget-rings-note').textContent = 'среднее за ' + monthsAvail + ' мес.';
+}
+
+// ── WORK REIMBURSEMENT ──
+function renderWorkReimbursement(allMonthOps) {
+  const card = document.getElementById('work-reimburse-card');
+  if (!card) return;
+  // Always show ALL work operations regardless of group filter
+  const workOps = allMonthOps.filter(function(o) { return (o.group || '').toLowerCase() === 'работа'; });
+  const workExp = workOps.filter(function(o) { return o.type === 'расход'; });
+  const workComp = workOps.filter(function(o) { return o.type === 'компенсация'; });
+  const totalSpent = workExp.reduce(function(s, o) { return s + Number(o.amount); }, 0);
+  const totalComp = workComp.reduce(function(s, o) { return s + Number(o.amount); }, 0);
+  const pending = Math.max(totalSpent - totalComp, 0);
+  if (!workExp.length && !workComp.length) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  document.getElementById('work-pending-amount').textContent = fmt(pending);
+  document.getElementById('work-total-spent').textContent = fmt(totalSpent);
+  document.getElementById('work-total-comp').textContent = fmt(totalComp);
+  const badge = document.getElementById('work-reimburse-badge');
+  if (badge) badge.textContent = workExp.length + ' расх.';
+  // List work expenses
+  const listEl = document.getElementById('work-ops-list');
+  if (listEl) {
+    const sorted = [...workExp].sort(function(a, b) { return (b.date || '').localeCompare(a.date || ''); });
+    listEl.innerHTML = sorted.slice(0, 8).map(function(o) {
+      const cfg = getCat(o.category);
+      return '<div class="tx-item">' +
+        '<div class="tx-icon work"><i class="' + cfg.icon + '"></i></div>' +
+        '<div class="tx-info"><div class="tx-name">' + (o.desc || o.category || '—') + '</div>' +
+        '<div class="tx-date">' + dayRu(o.date) + ' · ' + (o.category || '') + (o.subcategory ? ' / ' + o.subcategory : '') + '</div></div>' +
+        '<div class="tx-amount minus">−₽ ' + Number(o.amount).toLocaleString('ru') + '</div>' +
+        '</div>';
+    }).join('') + (sorted.length > 8 ? '<div style="text-align:center;font-size:12px;color:var(--text3);padding:8px 0">и ещё ' + (sorted.length - 8) + '...</div>' : '');
+  }
+}
+
+// ── ADD EXPENSE MODAL ──
+function openAddExpense() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('ae-date').value = today;
+  document.getElementById('ae-amount').value = '';
+  document.getElementById('ae-desc').value = '';
+  document.getElementById('ae-subcat').value = '';
+  document.getElementById('ae-type').value = 'расход';
+  document.getElementById('ae-group').value = currentGroup !== 'all' ? currentGroup : 'личное';
+  document.getElementById('ae-submit').disabled = false;
+  document.getElementById('ae-submit').textContent = 'Добавить в таблицу';
+  document.getElementById('addExpenseModal').classList.add('open');
+}
+
+function closeAddExpense() {
+  document.getElementById('addExpenseModal').classList.remove('open');
+}
+
+async function submitExpense() {
+  const btn = document.getElementById('ae-submit');
+  const date = document.getElementById('ae-date').value;
+  const amount = parseFloat(document.getElementById('ae-amount').value);
+  const type = document.getElementById('ae-type').value;
+  const group = document.getElementById('ae-group').value;
+  const category = document.getElementById('ae-category').value;
+  const desc = document.getElementById('ae-desc').value.trim();
+  const subcat = document.getElementById('ae-subcat').value.trim();
+
+  if (!date) { alert('Укажите дату'); return; }
+  if (!amount || amount <= 0) { alert('Укажите сумму больше 0'); return; }
+  if (!SCRIPT_URL) {
+    showToast('⚠️ Укажите SCRIPT_URL в коде дашборда');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Добавляем...';
+
+  try {
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date, amount, type, group, category, desc, subcategory: subcat })
+    });
+    closeAddExpense();
+    showToast('✓ Добавлено! Обновление через ~15 мин.');
+    setTimeout(function() { forceRefresh(); }, 800);
+  } catch(e) {
+    alert('Ошибка: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = 'Добавить в таблицу';
+  }
+}
+
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(function() { el.classList.remove('show'); }, 3000);
 }
 
 loadData();
