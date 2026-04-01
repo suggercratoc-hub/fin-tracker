@@ -253,6 +253,10 @@ initTelegram();
   .ring-pct { font-size:15px; font-weight:700; line-height:1; }
   .ring-cat-name { font-size:11px; color:var(--text2); font-weight:500; text-align:center; max-width:120px; }
   .ring-cat-val { font-size:10px; color:var(--text3); text-align:center; }
+  /* TX EDIT BUTTON */
+  .tx-edit-btn { background:none; border:none; color:var(--text3); font-size:14px; cursor:pointer; padding:4px 6px; border-radius:6px; opacity:0; transition:opacity 0.15s; flex-shrink:0; }
+  .tx-item:hover .tx-edit-btn { opacity:1; }
+  @media(max-width:768px){ .tx-edit-btn { opacity:0.6; } }
   /* DEBT ACTIONS */
   .debt-pay-btn { background:rgba(0,196,154,0.12); color:var(--teal); border:none; padding:4px 10px; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:background 0.15s; margin-top:5px; display:inline-block; }
   .debt-pay-btn:hover { background:rgba(0,196,154,0.22); }
@@ -538,7 +542,7 @@ window.onerror = function(msg, src, line) {
 <div class="modal-backdrop" id="addExpenseModal" onclick="if(event.target===this)closeAddExpense()">
   <div class="modal-sheet">
     <div class="modal-handle"></div>
-    <div class="modal-title">Новая операция</div>
+    <div class="modal-title" id="ae-modal-title">Новая операция</div>
     <div class="form-row">
       <label class="form-label">Дата</label>
       <input class="form-input" type="date" id="ae-date">
@@ -1158,12 +1162,22 @@ function renderDebtList(debts, total, listId, totalId) {
   }).join('');
 }
 
+var _opReg = {}; // registry: key → op object
+
+function _regOp(o) {
+  const k = [o.date, o.amount, o.category, o.type, o.desc||''].join('|').replace(/'/g,"\\'");
+  _opReg[k] = o;
+  return k;
+}
+
 function renderTxList(ops, elId) {
   const el = document.getElementById(elId);
   if (!ops.length) { el.innerHTML='<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Нет операций</div>'; return; }
   el.innerHTML = ops.map(o=>{
-    const isInc=o.type==='доход', cfg=getCat(o.category);
-    return `<div class="tx-item"><div class="tx-icon ${isInc?'income':cfg.cls}"><i class="${isInc?'ri-arrow-down-line':cfg.icon}"></i></div><div class="tx-info"><div class="tx-name">${o.description||o.category||'—'}</div><div class="tx-date">${dayRu(o.date)} · ${o.category||o.group||''}</div></div><div class="tx-amount ${isInc?'plus':'minus'}">${isInc?'+':'−'}₽ ${Number(o.amount).toLocaleString('ru')}</div></div>`;
+    const isInc=o.type==='доход'||o.type==='компенсация', cfg=getCat(o.category);
+    const key=_regOp(o);
+    const name=o.desc||o.description||o.category||'—';
+    return `<div class="tx-item"><div class="tx-icon ${isInc?'income':cfg.cls}"><i class="${isInc?'ri-arrow-down-line':cfg.icon}"></i></div><div class="tx-info"><div class="tx-name">${name}</div><div class="tx-date">${dayRu(o.date)} · ${o.category||o.group||''}</div></div><div class="tx-amount ${isInc?'plus':'minus'}">${isInc?'+':'−'}₽ ${Number(o.amount).toLocaleString('ru')}</div><button class="tx-edit-btn" onclick="openEditOp('${key}')" title="Редактировать"><i class="ri-pencil-line"></i></button></div>`;
   }).join('');
 }
 
@@ -1377,7 +1391,7 @@ function toggleCatSubs(subId, btn) {
 
 // ── SCRIPT_URL for adding transactions ──
 // Fill in your Google Apps Script Web App URL here:
-const SCRIPT_URL = '';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzAhFZDUAhwx3aMles0S2lXbCiWZ4DUj2z5FGeD5782ZZUo7yBwvu-9VbqtyYq3HSss/exec';
 
 // ── AUTO-BUDGET RINGS ──
 function calcAutoBudgets(allOps, currentMonthKey) {
@@ -1476,8 +1490,11 @@ function renderWorkReimbursement(allMonthOps) {
   }
 }
 
-// ── ADD EXPENSE MODAL ──
+// ── ADD / EDIT EXPENSE MODAL ──
+var _editingOp = null; // null = новая операция, object = редактирование
+
 function openAddExpense() {
+  _editingOp = null;
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('ae-date').value = today;
   document.getElementById('ae-amount').value = '';
@@ -1487,11 +1504,30 @@ function openAddExpense() {
   document.getElementById('ae-group').value = currentGroup !== 'all' ? currentGroup : 'личное';
   document.getElementById('ae-submit').disabled = false;
   document.getElementById('ae-submit').textContent = 'Добавить в таблицу';
+  document.getElementById('ae-modal-title').textContent = 'Новая операция';
+  document.getElementById('addExpenseModal').classList.add('open');
+}
+
+function openEditOp(key) {
+  const op = _opReg[key];
+  if (!op) { showToast('Операция не найдена в кэше — обновите страницу'); return; }
+  _editingOp = op;
+  document.getElementById('ae-date').value = op.date || '';
+  document.getElementById('ae-amount').value = op.amount || '';
+  document.getElementById('ae-type').value = op.type || 'расход';
+  document.getElementById('ae-group').value = op.group || 'личное';
+  document.getElementById('ae-category').value = op.category || 'Прочее';
+  document.getElementById('ae-desc').value = op.desc || op.description || '';
+  document.getElementById('ae-subcat').value = op.subcategory || '';
+  document.getElementById('ae-submit').disabled = false;
+  document.getElementById('ae-submit').textContent = 'Сохранить изменения';
+  document.getElementById('ae-modal-title').textContent = 'Редактировать операцию';
   document.getElementById('addExpenseModal').classList.add('open');
 }
 
 function closeAddExpense() {
   document.getElementById('addExpenseModal').classList.remove('open');
+  _editingOp = null;
 }
 
 async function submitExpense() {
@@ -1506,28 +1542,39 @@ async function submitExpense() {
 
   if (!date) { alert('Укажите дату'); return; }
   if (!amount || amount <= 0) { alert('Укажите сумму больше 0'); return; }
-  if (!SCRIPT_URL) {
-    showToast('⚠️ Укажите SCRIPT_URL в коде дашборда');
-    return;
-  }
+  if (!SCRIPT_URL) { showToast('⚠️ Укажите SCRIPT_URL в коде дашборда'); return; }
 
   btn.disabled = true;
-  btn.textContent = 'Добавляем...';
+
+  var payload;
+  if (_editingOp) {
+    btn.textContent = 'Сохраняем...';
+    payload = {
+      action: 'edit_op',
+      orig_date: _editingOp.date,
+      orig_amount: Number(_editingOp.amount),
+      orig_category: _editingOp.category || '',
+      orig_desc: _editingOp.desc || _editingOp.description || '',
+      date, amount, type, group, category, desc, subcategory: subcat
+    };
+  } else {
+    btn.textContent = 'Добавляем...';
+    payload = { date, amount, type, group, category, desc, subcategory: subcat };
+  }
 
   try {
     await fetch(SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
+      method: 'POST', mode: 'no-cors',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ date, amount, type, group, category, desc, subcategory: subcat })
+      body: JSON.stringify(payload)
     });
     closeAddExpense();
-    showToast('✓ Добавлено! Обновление через ~15 мин.');
+    showToast(_editingOp ? '✓ Изменено! Обновляем...' : '✓ Добавлено! Обновление через ~15 мин.');
     setTimeout(function() { forceRefresh(); }, 800);
   } catch(e) {
     alert('Ошибка: ' + e.message);
     btn.disabled = false;
-    btn.textContent = 'Добавить в таблицу';
+    btn.textContent = _editingOp ? 'Сохранить изменения' : 'Добавить в таблицу';
   }
 }
 
