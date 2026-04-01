@@ -2,13 +2,6 @@ name: Update Finance Data
 
 on:
   repository_dispatch:
-    types: [sheets-updated]
-  schedule:
-    - cron: '*/15 * * * *'
-  workflow_dispatch:name: Update Finance Data
-
-on:
-  repository_dispatch:
     types: [sheets-updated]   # мгновенное обновление при изменении таблицы
   schedule:
     - cron: '*/15 * * * *'   # резервное обновление каждые 15 минут
@@ -44,37 +37,3 @@ jobs:
           git add data.json
           git diff --staged --quiet || git commit -m "chore: update finance data $(date -u +%H:%M)"
           git push
-
-
-permissions:
-  contents: write
-
-jobs:
-  update:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Fetch data from Apps Script
-        run: |
-          curl -L --max-time 30 \
-            "https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec" \
-            -o data.json
-
-      - name: Validate JSON
-        run: python3 -c "import json; json.load(open('data.json')); print('JSON valid')"
-
-      - name: Upload data.json via GitHub API
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          SHA=$(gh api "repos/${{ github.repository }}/contents/data.json" --jq '.sha' 2>/dev/null || echo "")
-          CONTENT=$(base64 -w 0 data.json)
-          if [ -n "$SHA" ]; then
-            gh api --method PUT "repos/${{ github.repository }}/contents/data.json" \
-              -f message="chore: update finance data $(date -u +%H:%M)" \
-              -f content="$CONTENT" \
-              -f sha="$SHA"
-          else
-            gh api --method PUT "repos/${{ github.repository }}/contents/data.json" \
-              -f message="chore: update finance data $(date -u +%H:%M)" \
-              -f content="$CONTENT"
-          fi
