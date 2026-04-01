@@ -783,7 +783,7 @@ function switchView(view) {
 function renderView(view) {
   const month = document.getElementById('monthSelect').value;
   const ops = filterByGroup(allData.operations.filter(o => toYYYYMM(o.date) === month));
-  const debts = allData.debts.filter(d => d.status === 'активный' && (Number(d.remaining)||(Number(d.initial)-Number(d.paid))) > 0);
+  const debts = allData.debts.filter(d => d.status !== 'погашен' && (Number(d.remaining)||(Number(d.initial)-Number(d.paid))) > 0);
 
   if (view === 'income')     renderIncomeView(ops);
   if (view === 'expenses')   renderExpensesView(ops);
@@ -895,7 +895,7 @@ function renderDashboard(monthKey) {
   if (!monthKey || !monthKey.includes('-')) return;
   const allOps = allData.operations.filter(o => toYYYYMM(o.date) === monthKey);
   const ops = filterByGroup(allOps);
-  const debts = allData.debts.filter(d => d.status === 'активный' && (Number(d.remaining)||(Number(d.initial)-Number(d.paid))) > 0);
+  const debts = allData.debts.filter(d => d.status !== 'погашен' && (Number(d.remaining)||(Number(d.initial)-Number(d.paid))) > 0);
 
   const incOps = ops.filter(o => o.type === 'доход' || o.type === 'компенсация');
   const expOps = ops.filter(o => o.type === 'расход');
@@ -1395,11 +1395,14 @@ async function submitDebt() {
         if (d.creditor !== payload.creditor) return d;
         const newPaid = (Number(d.paid) || 0) + payload.amount;
         const newRem = Math.max((Number(d.initial) || 0) - newPaid, 0);
-        return Object.assign({}, d, { paid: newPaid, remaining: newRem, lastPay: payDate, status: newRem === 0 ? 'закрытый' : d.status });
+        return Object.assign({}, d, { paid: newPaid, remaining: newRem, lastPay: payDate, status: newRem === 0 ? 'погашен' : d.status });
       });
       const curMonth = document.getElementById('monthSelect') ? document.getElementById('monthSelect').value : toYYYYMM(payDate);
       renderDashboard(curMonth);
-      showToast('✓ Платёж записан');
+      // Помечаем баланс как "ожидает синхронизации" — данные обновятся через ~15 мин
+      const subEl = document.getElementById('kpi-balance-sub');
+      if (subEl) subEl.innerHTML += ' <span style="color:var(--yellow);font-size:10px">⏳ синхр.</span>';
+      showToast('✓ Платёж записан · баланс обновится через ~15 мин');
     } else if (debtTab === 'add' && allData) {
       // Добавляем долг локально
       const dateVal = payload.date || new Date().toISOString().split('T')[0];
@@ -1441,7 +1444,7 @@ function toggleCatSubs(subId, btn) {
 
 // ── SCRIPT_URL for adding transactions ──
 // Fill in your Google Apps Script Web App URL here:
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzGdZQQi0VJ9Rsn1LekuaiIvg7m6FIIt1SpBfR1t4aE0EnA-msng4FuCM1OSt0dxDIi/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxFZMaJwlMGBrxyhRJKMAcQYdxx97OMBvRG1rFdmZAZD5SCu4-RvneiLONdizfAyuWl/exec';
 
 // ── AUTO-BUDGET RINGS ──
 function calcAutoBudgets(allOps, currentMonthKey) {
