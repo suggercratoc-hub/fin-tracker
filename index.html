@@ -868,7 +868,12 @@ async function loadData() {
 }
 
 function populateMonthSelectors() {
-  const months = [...new Set(allData.operations.map(o=>toYYYYMM(o.date)).filter(Boolean))].sort().reverse();
+  let months = [...new Set(allData.operations.map(o=>toYYYYMM(o.date)).filter(Boolean))].sort().reverse();
+  // Если операций нет — добавляем текущий месяц как заглушку
+  if (!months.length) {
+    const now = new Date();
+    months = [now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0')];
+  }
   ['monthSelect','monthSelectMobile'].forEach(id => {
     const sel = document.getElementById(id);
     if (!sel) return;
@@ -888,6 +893,7 @@ function syncMonth(from) {
 
 // ── DASHBOARD ──
 function renderDashboard(monthKey) {
+  if (!monthKey || !monthKey.includes('-')) return;
   const allOps = allData.operations.filter(o => toYYYYMM(o.date) === monthKey);
   const ops = filterByGroup(allOps);
   const debts = allData.debts.filter(d => d.status === 'активный');
@@ -1174,8 +1180,10 @@ function renderDonut(cats, total) {
 
 function renderLineChart(ops, monthKey) {
   if (typeof Chart === 'undefined') return;
+  if (!monthKey || !monthKey.includes('-')) return;
   const [y, m] = monthKey.split('-').map(Number);
   const days = new Date(y, m, 0).getDate();
+  if (!days || isNaN(days) || days <= 0) return;
 
   const inc = new Array(days).fill(0), exp = new Array(days).fill(0);
   ops.forEach(o => {
@@ -1369,7 +1377,7 @@ function toggleCatSubs(subId, btn) {
 
 // ── SCRIPT_URL for adding transactions ──
 // Fill in your Google Apps Script Web App URL here:
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwMKXVzy8N8bt2FgmEGyaGVSR5aUisMfjKL9PombRJ3Iky6XgTXLY8FGhpu6dmTNdBZ/exec';
+const SCRIPT_URL = '';
 
 // ── AUTO-BUDGET RINGS ──
 function calcAutoBudgets(allOps, currentMonthKey) {
