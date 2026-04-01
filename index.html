@@ -104,6 +104,11 @@ initTelegram();
   /* SUBCATEGORY */
   .subcat-item { display:flex; justify-content:space-between; font-size:11px; color:var(--text3); padding:3px 0 3px 22px; }
   .subcat-item span:last-child { font-weight:500; color:var(--text2); }
+  .cat-subs { overflow:hidden; transition:max-height 0.3s ease; }
+  .cat-subs.collapsed { max-height:0 !important; }
+  .cat-toggle { font-size:11px; color:var(--text3); cursor:pointer; padding:2px 6px; border-radius:4px; transition:color 0.15s; user-select:none; }
+  .cat-toggle:hover { color:var(--text2); }
+  .cat-item { cursor:default; }
   /* WEEKLY */
   .week-item { margin-bottom:12px; }
   .week-header { display:flex; justify-content:space-between; font-size:12px; margin-bottom:5px; }
@@ -134,7 +139,7 @@ initTelegram();
 
   /* DONUT */
   .donut-wrap { position:relative; width:100%; max-width:240px; margin:0 auto 8px; }
-  .donut-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-58%); text-align:center; pointer-events:none; }
+  .donut-center { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); text-align:center; pointer-events:none; z-index:2; }
   .donut-center-val { font-size:18px; font-weight:700; line-height:1; }
   .donut-center-lbl { font-size:10px; color:var(--text3); margin-top:3px; }
 
@@ -668,7 +673,7 @@ function parseDate(v){
   return new Date(v);
 }
 function toYYYYMM(s){ return s?s.substring(0,7):''; }
-function fmt(n){ return '₽ '+Math.round(n).toLocaleString('ru'); }
+function fmt(n){ const v=Number(n); return isNaN(v)?'₽ —':'₽ '+Math.round(v).toLocaleString('ru'); }
 function monthLabel(s){
   if(!s) return '';
   const[y,m]=s.split('-');
@@ -819,7 +824,7 @@ function renderDashboard(monthKey) {
   const totalInc = incOps.reduce((s,o) => s + Number(o.amount), 0);
   const totalExp = expOps.reduce((s,o) => s + Number(o.amount), 0);
   const totalComp = compOps.reduce((s,o) => s + Number(o.amount), 0);
-  const totalDebt = debts.reduce((s,d) => s + Number(d.remaining), 0);
+  const totalDebt = debts.reduce((s,d) => { const rem=Number(d.remaining); const ini=Number(d.initial)||0, paid=Number(d.paid)||0; return s+(isNaN(rem)?(ini-paid):rem); }, 0);
   const balance = totalInc - totalExp;
 
   // Предыдущий месяц для дельты
@@ -943,8 +948,11 @@ function renderPlannedPayments(plans, ops, monthKey) {
 function renderDebtCapacity(debts, totalDebt, monthlyIncome, freeBalance) {
   const el = document.getElementById('debt-capacity-dash');
   if (!el || !debts.length) { if(el) el.innerHTML=''; return; }
-  const dtiPct = monthlyIncome > 0 ? Math.round(totalDebt / monthlyIncome * 100) : 0;
-  const monthsTo = monthlyIncome > 0 && totalDebt > 0 ? Math.ceil(totalDebt / (monthlyIncome * 0.3)) : null;
+  const safeDebt = isNaN(totalDebt) ? 0 : totalDebt;
+  const safeInc  = isNaN(monthlyIncome) ? 0 : monthlyIncome;
+  const safeBal  = isNaN(freeBalance) ? 0 : freeBalance;
+  const dtiPct = safeInc > 0 ? Math.round(safeDebt / safeInc * 100) : 0;
+  const monthsTo = safeInc > 0 && safeDebt > 0 ? Math.ceil(safeDebt / (safeInc * 0.3)) : null;
   const color = dtiPct > 300 ? 'var(--red)' : dtiPct > 150 ? 'var(--yellow)' : 'var(--teal)';
   const status = dtiPct > 300 ? '⚠️ высокая' : dtiPct > 150 ? '⚡ умеренная' : '✓ норма';
   el.innerHTML =
@@ -952,7 +960,7 @@ function renderDebtCapacity(debts, totalDebt, monthlyIncome, freeBalance) {
     '<div class="debt-cap-row"><span style="color:var(--text3);font-size:12px">Нагрузка: долг/доход месяца</span>' +
     '<span style="color:' + color + ';font-size:12px;font-weight:600">' + dtiPct + '% — ' + status + '</span></div>' +
     '<div class="debt-cap-bar-wrap"><div class="debt-cap-bar" style="width:' + Math.min(dtiPct / 3, 100) + '%;background:' + color + '"></div></div>' +
-    '<div style="font-size:11px;color:var(--text3)">Свободных: ' + fmt(freeBalance) + ' · Долг: ' + fmt(totalDebt) +
+    '<div style="font-size:11px;color:var(--text3)">Свободных: ' + fmt(safeBal) + ' · Долг: ' + fmt(safeDebt) +
     (monthsTo ? ' · ~' + monthsTo + ' мес. до погашения' : '') + '</div>' +
     '</div>';
 }
@@ -1032,13 +1040,18 @@ function renderCatBarsWithSubs(cats, total, elId, totalColor) {
     const budMarker = bud ? `<div class="budget-limit-marker" style="left:${Math.min(Math.round(bud.limit/maxVal*100),100)}%"></div>` : '';
     const budNote = bud ? `<span style="font-size:10px;color:${isOver?'var(--red)':'var(--text3)'};margin-left:4px">${isOver?'⚠️ ':''}лимит ${fmt(bud.limit)}</span>` : '';
     const subEntries = Object.entries(subs || {}).sort((a,b) => b[1]-a[1]);
+    const hasSubs = subEntries.length > 0;
+    const subId = 'subs-' + name.replace(/\s/g,'_');
     const subHtml = subEntries.map(([sc, sv]) =>
       `<div class="subcat-item"><span>${sc}</span><span>${fmt(sv)}</span></div>`
     ).join('');
+    const toggleBtn = hasSubs
+      ? `<span class="cat-toggle" onclick="toggleCatSubs('${subId}',this)" title="Развернуть/свернуть">▾</span>`
+      : '';
     return `<div class="cat-item${isOver?' budget-over':''}">` +
-      `<div class="cat-header"><span class="cat-name-wrap"><i class="${cfg.icon}" style="color:${cfg.color}"></i> ${name}${budNote}</span><span class="cat-val">${fmt(val)}</span></div>` +
+      `<div class="cat-header"><span class="cat-name-wrap"><i class="${cfg.icon}" style="color:${cfg.color}"></i> ${name}${budNote}</span><span style="display:flex;align-items:center;gap:6px">${toggleBtn}<span class="cat-val">${fmt(val)}</span></span></div>` +
       `<div class="cat-bar-wrap budget-line"><div class="cat-bar" style="width:${pct}%;background:linear-gradient(90deg,${cfg.grad[0]},${cfg.grad[1]})"></div>${budMarker}</div>` +
-      subHtml +
+      (hasSubs ? `<div class="cat-subs collapsed" id="${subId}" style="max-height:${subEntries.length*26}px">${subHtml}</div>` : '') +
       `</div>`;
   }).join('');
   html += `<div class="total-row"><span class="total-label">Итого</span><span class="total-val" style="color:${totalColor}">${fmt(total)}</span></div>`;
@@ -1056,9 +1069,12 @@ function renderDebtList(debts, total, listId, totalId) {
   if (!debts.length) { el.innerHTML='<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Нет активных долгов</div>'; return; }
   el.innerHTML = debts.map(d=>{
     const cfg=DEBT_ICONS[d.type]||DEBT_ICONS['прочее'];
-    const pct=d.initial>0?Math.round(d.paid/d.initial*100):0;
+    const initial=Number(d.initial)||0, paid=Number(d.paid)||0;
+    // remaining: prefer explicit field, fallback to calculation
+    const remaining=Number(d.remaining)||(initial-paid)||0;
+    const pct=initial>0?Math.min(Math.round(paid/initial*100),100):0;
     const bar=cfg.textColor==='var(--red)'?'linear-gradient(90deg,#c0392b,#ff4d4f)':'linear-gradient(90deg,#e67e22,#ffbb33)';
-    return `<div class="debt-item"><div class="debt-icon-box" style="background:${cfg.color};color:${cfg.textColor}"><i class="${cfg.icon}"></i></div><div class="debt-info"><div class="debt-name">${d.creditor}</div><div class="debt-bar-wrap"><div class="debt-bar" style="width:${pct}%;background:${bar}"></div></div><div class="debt-meta"><span>Погашено ${pct}%</span><span>было ${fmt(d.initial)}</span></div></div><div class="debt-amount" style="color:${cfg.textColor}">${fmt(d.remaining)}</div></div>`;
+    return `<div class="debt-item"><div class="debt-icon-box" style="background:${cfg.color};color:${cfg.textColor}"><i class="${cfg.icon}"></i></div><div class="debt-info"><div class="debt-name">${d.creditor}</div><div class="debt-bar-wrap"><div class="debt-bar" style="width:${pct}%;background:${bar}"></div></div><div class="debt-meta"><span>Погашено ${pct}%</span><span>было ${fmt(initial)}</span></div></div><div class="debt-amount" style="color:${cfg.textColor}">${fmt(remaining)}</div></div>`;
   }).join('');
 }
 
@@ -1078,7 +1094,7 @@ function renderDonut(cats, total) {
   donutChartInst = new Chart(document.getElementById('donutChart').getContext('2d'), {
     type:'doughnut',
     data:{ labels:cats.map(c=>c[0]), datasets:[{ data:cats.map(c=>c[1]), backgroundColor:cats.map((_,i)=>DONUT_COLORS[i%DONUT_COLORS.length]), borderColor:'#1e1e1e', borderWidth:4, hoverOffset:10, borderRadius:4 }] },
-    options:{ cutout:'68%', responsive:true, plugins:{ legend:{ position:'bottom', labels:{ color:'#b3b3b3', boxWidth:10, boxHeight:10, borderRadius:3, useBorderRadius:true, font:{size:12,family:'Rubik'}, padding:14 } }, tooltip:{ backgroundColor:'#1e1e1e', borderColor:'#2a2a2a', borderWidth:1, titleColor:'#fff', bodyColor:'#b3b3b3', padding:12, callbacks:{ label:ctx=>{ const p=total?Math.round(ctx.raw/total*100):0; return ` ₽ ${ctx.raw.toLocaleString('ru')}  (${p}%)`; } } } } }
+    options:{ cutout:'68%', responsive:true, plugins:{ legend:{ position:'bottom', labels:{ color:'#b3b3b3', boxWidth:10, boxHeight:10, borderRadius:3, useBorderRadius:true, font:{size:12,family:'Rubik'}, padding:14 } }, tooltip:{ position:'nearest', yAlign:'bottom', backgroundColor:'#1e1e1e', borderColor:'#2a2a2a', borderWidth:1, titleColor:'#fff', bodyColor:'#b3b3b3', padding:12, callbacks:{ label:ctx=>{ const p=total?Math.round(ctx.raw/total*100):0; return ` ₽ ${ctx.raw.toLocaleString('ru')}  (${p}%)`; } } } } }
   });
 }
 
@@ -1151,9 +1167,25 @@ if (chartjsEl) {
   });
 }
 
+// ── CATEGORY COLLAPSE ──
+function toggleCatSubs(subId, btn) {
+  const el = document.getElementById(subId);
+  if (!el) return;
+  const isCollapsed = el.classList.contains('collapsed');
+  if (isCollapsed) {
+    el.classList.remove('collapsed');
+    btn.textContent = '▴';
+    btn.title = 'Свернуть';
+  } else {
+    el.classList.add('collapsed');
+    btn.textContent = '▾';
+    btn.title = 'Развернуть';
+  }
+}
+
 // ── SCRIPT_URL for adding transactions ──
 // Fill in your Google Apps Script Web App URL here:
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxbmywTdGf5KDFD7Tp9Xns_fSvcqXG4cabmX8S5XaPkFQgOjn1Y1waSA0HihZ86mgD-/exec';
+const SCRIPT_URL = '';
 
 // ── AUTO-BUDGET RINGS ──
 function calcAutoBudgets(allOps, currentMonthKey) {
@@ -1177,37 +1209,45 @@ function renderBudgetRings(expOps, monthKey) {
   if (!el) return;
   const allOps = allData.operations;
   const avgBudgets = calcAutoBudgets(allOps, monthKey);
-  if (!Object.keys(avgBudgets).length) {
-    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Нужен хотя бы 1 предыдущий месяц для расчёта</div>';
+  const hasHistory = Object.keys(avgBudgets).length > 0;
+  const curMap = {};
+  expOps.forEach(function(o) { const c = o.category || 'Прочее'; curMap[c] = (curMap[c] || 0) + Number(o.amount); });
+  // Merge: current cats + historical cats
+  const allCats = Array.from(new Set(Object.keys(curMap).concat(Object.keys(avgBudgets)))).filter(function(c) { return (avgBudgets[c] || 0) > 0 || (curMap[c] || 0) > 0; });
+  if (!allCats.length) {
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Нет данных о расходах за этот месяц</div>';
     document.getElementById('budget-rings-note').textContent = '';
     return;
   }
-  const curMap = {};
-  expOps.forEach(function(o) { const c = o.category || 'Прочее'; curMap[c] = (curMap[c] || 0) + Number(o.amount); });
-  const allCats = Array.from(new Set(Object.keys(curMap).concat(Object.keys(avgBudgets)))).filter(function(c) { return (avgBudgets[c] || 0) > 0 || (curMap[c] || 0) > 0; });
   const sortedCats = allCats.sort(function(a, b) { return (curMap[b] || 0) - (curMap[a] || 0); });
   const R = 36, SW = 7, C = 2 * Math.PI * R;
   const html = sortedCats.map(function(cat) {
-    const cur = curMap[cat] || 0, avg = avgBudgets[cat] || cur || 1;
-    const pct = Math.min(Math.round(cur / avg * 100), 150);
-    const fill = Math.min(pct / 100, 1) * C;
+    const cur = curMap[cat] || 0;
+    const noHist = !hasHistory || !avgBudgets[cat];
+    // If no history: show ring filled proportionally to share of total current spending
+    const totalCur = Object.values(curMap).reduce(function(s,v){return s+v;},0);
+    const avg = noHist ? (cur || 1) : (avgBudgets[cat] || cur || 1);
+    const pct = noHist ? (totalCur > 0 ? Math.round(cur / totalCur * 100) : 0) : Math.min(Math.round(cur / avg * 100), 150);
+    const fill = noHist ? (cur / (totalCur || 1)) * C : Math.min(pct / 100, 1) * C;
     const cfg = getCat(cat);
-    const ringColor = pct > 100 ? 'var(--red)' : pct > 80 ? 'var(--yellow)' : cfg.color;
+    const ringColor = noHist ? cfg.color : (pct > 100 ? 'var(--red)' : pct > 80 ? 'var(--yellow)' : cfg.color);
+    const label = noHist ? (cur > 0 ? (pct + '%') : '—') : pct + '%';
+    const subLabel = noHist ? 'от общ.' : (pct > 100 ? '⚠️' : '');
     return '<div class="ring-item">' +
       '<div class="ring-svg-wrap"><svg viewBox="0 0 88 88" width="88" height="88">' +
       '<circle cx="44" cy="44" r="' + R + '" fill="none" stroke="var(--bg3)" stroke-width="' + SW + '"/>' +
       '<circle cx="44" cy="44" r="' + R + '" fill="none" stroke="' + ringColor + '" stroke-width="' + SW + '"' +
       ' stroke-dasharray="' + fill.toFixed(1) + ' ' + C.toFixed(1) + '" stroke-linecap="round"' +
       ' style="transition:stroke-dasharray 0.7s ease"/></svg>' +
-      '<div class="ring-label-center"><div class="ring-pct" style="color:' + ringColor + '">' + pct + '%</div>' +
-      (pct > 100 ? '<div style="font-size:8px">⚠️</div>' : '') + '</div></div>' +
+      '<div class="ring-label-center"><div class="ring-pct" style="color:' + ringColor + '">' + label + '</div>' +
+      (subLabel ? '<div style="font-size:8px;color:var(--text3)">' + subLabel + '</div>' : '') + '</div></div>' +
       '<div class="ring-cat-name"><i class="' + cfg.icon + '" style="color:' + cfg.color + '"></i> ' + cat + '</div>' +
-      '<div class="ring-cat-val">' + fmt(cur) + ' / ' + fmt(avg) + '</div>' +
+      '<div class="ring-cat-val">' + fmt(cur) + (noHist ? '' : (' / ' + fmt(avg))) + '</div>' +
       '</div>';
   }).join('');
   el.innerHTML = '<div class="rings-grid">' + html + '</div>';
   const monthsAvail = [prevMonth(monthKey), prevMonth(prevMonth(monthKey)), prevMonth(prevMonth(prevMonth(monthKey)))].filter(function(m) { return allOps.some(function(o) { return toYYYYMM(o.date) === m; }); }).length;
-  document.getElementById('budget-rings-note').textContent = 'среднее за ' + monthsAvail + ' мес.';
+  document.getElementById('budget-rings-note').textContent = hasHistory ? ('среднее за ' + monthsAvail + ' мес.') : 'нет истории — показана доля от общих расходов';
 }
 
 // ── WORK REIMBURSEMENT ──
