@@ -448,7 +448,10 @@ window.onerror = function(msg, src, line) {
         <span id="work-reimburse-badge" style="background:rgba(59,130,246,0.15);color:var(--blue);font-size:11px;padding:3px 8px;border-radius:20px;font-weight:600;text-transform:none;letter-spacing:0"></span>
       </div>
       <div class="work-pending-label"><i class="ri-arrow-go-back-line"></i> Ожидаю возврат (все месяцы)</div>
-      <div class="work-pending-amount" id="work-pending-amount">—</div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+        <div class="work-pending-amount" id="work-pending-amount" style="margin:0">—</div>
+        <button id="work-got-paid-btn" onclick="workGotPaid()" style="display:none;background:rgba(0,196,154,0.15);color:var(--teal);border:1px solid rgba(0,196,154,0.3);border-radius:8px;padding:6px 12px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit"><i class="ri-check-double-line"></i> Получил деньги</button>
+      </div>
       <div style="display:flex;gap:16px;margin-bottom:14px;flex-wrap:wrap">
         <div><div class="kpi-label" style="font-size:11px">Потрачено</div><div style="font-weight:700;font-size:15px;color:var(--red)" id="work-total-spent">—</div></div>
         <div><div class="kpi-label" style="font-size:11px">Уже получено</div><div style="font-weight:700;font-size:15px;color:var(--teal)" id="work-total-comp">—</div></div>
@@ -780,7 +783,7 @@ function switchView(view) {
 function renderView(view) {
   const month = document.getElementById('monthSelect').value;
   const ops = filterByGroup(allData.operations.filter(o => toYYYYMM(o.date) === month));
-  const debts = allData.debts.filter(d => d.status === 'активный');
+  const debts = allData.debts.filter(d => d.status === 'активный' && (Number(d.remaining)||(Number(d.initial)-Number(d.paid))) > 0);
 
   if (view === 'income')     renderIncomeView(ops);
   if (view === 'expenses')   renderExpensesView(ops);
@@ -892,7 +895,7 @@ function renderDashboard(monthKey) {
   if (!monthKey || !monthKey.includes('-')) return;
   const allOps = allData.operations.filter(o => toYYYYMM(o.date) === monthKey);
   const ops = filterByGroup(allOps);
-  const debts = allData.debts.filter(d => d.status === 'активный');
+  const debts = allData.debts.filter(d => d.status === 'активный' && (Number(d.remaining)||(Number(d.initial)-Number(d.paid))) > 0);
 
   const incOps = ops.filter(o => o.type === 'доход' || o.type === 'компенсация');
   const expOps = ops.filter(o => o.type === 'расход');
@@ -1004,7 +1007,7 @@ function renderPlannedPayments(plans, ops, monthKey) {
   const el = document.getElementById('planned-payments');
   if (!el) return;
   if (!plans || !plans.length) {
-    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Нет запланированных платежей</div>';
+    el.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:16px 0;text-align:center">Нет данных — нажмите 🔄 для обновления</div>';
     return;
   }
   const [y, m] = monthKey.split('-').map(Number);
@@ -1037,15 +1040,24 @@ function renderDebtCapacity(debts, totalDebt, monthlyIncome, freeBalance) {
   const el = document.getElementById('debt-capacity-dash');
   if (!el || !debts.length) { if(el) el.innerHTML=''; return; }
   const safeDebt = isNaN(totalDebt) ? 0 : totalDebt;
-  const safeInc  = isNaN(monthlyIncome) ? 0 : monthlyIncome;
   const safeBal  = isNaN(freeBalance) ? 0 : freeBalance;
+
+  // Средний доход за последние 3 месяца — точнее чем только текущий
+  const allIncOps = (allData.operations || []).filter(o => o.type === 'доход' || o.type === 'компенсация');
+  const months = [...new Set(allIncOps.map(o => toYYYYMM(o.date)).filter(Boolean))].sort().slice(-3);
+  const avgInc = months.length > 0
+    ? months.reduce((s, mk) => s + allIncOps.filter(o => toYYYYMM(o.date) === mk).reduce((ss, o) => ss + Number(o.amount), 0), 0) / months.length
+    : (isNaN(monthlyIncome) ? 0 : monthlyIncome);
+
+  const safeInc = avgInc || (isNaN(monthlyIncome) ? 0 : monthlyIncome);
   const dtiPct = safeInc > 0 ? Math.round(safeDebt / safeInc * 100) : 0;
   const monthsTo = safeInc > 0 && safeDebt > 0 ? Math.ceil(safeDebt / (safeInc * 0.3)) : null;
   const color = dtiPct > 300 ? 'var(--red)' : dtiPct > 150 ? 'var(--yellow)' : 'var(--teal)';
   const status = dtiPct > 300 ? '⚠️ высокая' : dtiPct > 150 ? '⚡ умеренная' : '✓ норма';
+  const incLabel = months.length > 1 ? 'ср. доход ' + months.length + ' мес.' : 'доход месяца';
   el.innerHTML =
     '<div class="debt-cap-section">' +
-    '<div class="debt-cap-row"><span style="color:var(--text3);font-size:12px">Нагрузка: долг/доход месяца</span>' +
+    '<div class="debt-cap-row"><span style="color:var(--text3);font-size:12px">Нагрузка: долг / ' + incLabel + '</span>' +
     '<span style="color:' + color + ';font-size:12px;font-weight:600">' + dtiPct + '% — ' + status + '</span></div>' +
     '<div class="debt-cap-bar-wrap"><div class="debt-cap-bar" style="width:' + Math.min(dtiPct / 3, 100) + '%;background:' + color + '"></div></div>' +
     '<div style="font-size:11px;color:var(--text3)">Свободных: ' + fmt(safeBal) + ' · Долг: ' + fmt(safeDebt) +
@@ -1512,6 +1524,9 @@ function renderWorkReimbursement(allOps) {
   document.getElementById('work-total-comp').textContent = fmt(totalComp);
   const badge = document.getElementById('work-reimburse-badge');
   if (badge) badge.textContent = workExp.length + ' расх.';
+  // Показываем кнопку «Получил деньги» только если есть что получать
+  const gotPaidBtn = document.getElementById('work-got-paid-btn');
+  if (gotPaidBtn) { gotPaidBtn.style.display = pending > 0 ? '' : 'none'; gotPaidBtn.dataset.amount = pending; }
   // Список — последние 8 рабочих расходов за всё время
   const listEl = document.getElementById('work-ops-list');
   if (listEl) {
@@ -1525,6 +1540,31 @@ function renderWorkReimbursement(allOps) {
         '<div class="tx-amount minus">−₽ ' + Number(o.amount).toLocaleString('ru') + '</div>' +
         '</div>';
     }).join('') + (sorted.length > 8 ? '<div style="text-align:center;font-size:12px;color:var(--text3);padding:8px 0">и ещё ' + (sorted.length - 8) + '...</div>' : '');
+  }
+}
+
+// ── WORK GOT PAID ──
+async function workGotPaid() {
+  const btn = document.getElementById('work-got-paid-btn');
+  const pending = parseFloat(btn.dataset.amount) || 0;
+  if (!pending) return;
+  if (!confirm('Отметить возврат ' + fmt(pending) + ' рабочих расходов?')) return;
+  if (!SCRIPT_URL) { showToast('⚠️ Укажите SCRIPT_URL'); return; }
+  btn.disabled = true;
+  const today = new Date().toISOString().split('T')[0];
+  const payload = { date: today, amount: pending, type: 'компенсация', group: 'работа', category: 'Компенсация', desc: 'Возврат рабочих расходов', subcategory: '' };
+  try {
+    await fetch(SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    // Оптимистично добавляем в данные
+    if (allData) {
+      allData.operations.push(Object.assign({ source: 'dashboard', order: '' }, payload));
+      const curMonth = document.getElementById('monthSelect') ? document.getElementById('monthSelect').value : toYYYYMM(today);
+      renderDashboard(curMonth);
+    }
+    showToast('✓ Возврат записан — рабочие расходы обнулены');
+  } catch(e) {
+    alert('Ошибка: ' + e.message);
+    btn.disabled = false;
   }
 }
 
