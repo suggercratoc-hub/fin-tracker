@@ -253,6 +253,16 @@ initTelegram();
   .ring-pct { font-size:15px; font-weight:700; line-height:1; }
   .ring-cat-name { font-size:11px; color:var(--text2); font-weight:500; text-align:center; max-width:120px; }
   .ring-cat-val { font-size:10px; color:var(--text3); text-align:center; }
+  /* DEBT ACTIONS */
+  .debt-pay-btn { background:rgba(0,196,154,0.12); color:var(--teal); border:none; padding:4px 10px; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; transition:background 0.15s; margin-top:5px; display:inline-block; }
+  .debt-pay-btn:hover { background:rgba(0,196,154,0.22); }
+  .debt-add-btn { background:rgba(126,91,239,0.12); color:var(--purple-l); border:none; padding:4px 10px; border-radius:8px; font-size:11px; font-weight:600; cursor:pointer; font-family:inherit; text-transform:none; letter-spacing:0; }
+  .debt-add-btn:hover { background:rgba(126,91,239,0.22); }
+  .debt-item-inner { display:flex; align-items:center; gap:14px; }
+  /* MODAL TABS */
+  .modal-tabs { display:flex; gap:0; background:var(--bg3); border-radius:10px; padding:3px; margin-bottom:18px; }
+  .modal-tab { flex:1; text-align:center; padding:7px; border-radius:8px; font-size:13px; font-weight:500; cursor:pointer; color:var(--text3); transition:all 0.15s; border:none; background:transparent; font-family:inherit; }
+  .modal-tab.active { background:var(--bg2); color:var(--text1); box-shadow:0 1px 4px rgba(0,0,0,0.3); }
   /* WORK REIMBURSEMENT */
   .work-card-total { font-size:22px; font-weight:700; color:var(--blue); margin:2px 0 14px; }
   .work-pending-label { font-size:12px; color:var(--text3); display:flex; align-items:center; gap:6px; }
@@ -421,7 +431,7 @@ window.onerror = function(msg, src, line) {
         <div id="category-bars"><div style="color:var(--text3);font-size:13px;padding:20px 0;text-align:center">Загрузка...</div></div>
       </div>
       <div class="card">
-        <div class="card-title">Долги</div>
+        <div class="card-title">Долги <button onclick="openAddDebt()" class="debt-add-btn"><i class="ri-add-line"></i> Добавить</button></div>
         <div id="debt-list-dash"></div>
         <div class="total-row"><span class="total-label">Общий долг</span><span class="total-val" id="debt-total-dash">—</span></div>
         <div id="debt-capacity-dash"></div>
@@ -586,6 +596,70 @@ window.onerror = function(msg, src, line) {
   </div>
 </div>
 <div class="toast" id="toast"></div>
+
+<!-- DEBT MODAL -->
+<div class="modal-backdrop" id="debtModal" onclick="if(event.target===this)closeDebtModal()">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="dtab-pay" onclick="switchDebtTab('pay')">Внести платёж</button>
+      <button class="modal-tab" id="dtab-add" onclick="switchDebtTab('add')">Новый долг</button>
+    </div>
+
+    <!-- PAY SECTION -->
+    <div id="debt-pay-section">
+      <div class="form-row">
+        <label class="form-label">Кредитор</label>
+        <select class="form-input" id="dp-creditor"></select>
+      </div>
+      <div class="form-row-2">
+        <div>
+          <label class="form-label">Сумма платежа, ₽</label>
+          <input class="form-input" type="number" id="dp-amount" placeholder="0" inputmode="decimal" min="0">
+        </div>
+        <div>
+          <label class="form-label">Дата платежа</label>
+          <input class="form-input" type="date" id="dp-date">
+        </div>
+      </div>
+      <div id="dp-remaining-hint" style="font-size:12px;color:var(--text3);margin-bottom:12px"></div>
+    </div>
+
+    <!-- ADD SECTION -->
+    <div id="debt-add-section" style="display:none">
+      <div class="form-row">
+        <label class="form-label">Кредитор / название</label>
+        <input class="form-input" type="text" id="da-creditor" placeholder="Напр. Тинькофф, Иванов...">
+      </div>
+      <div class="form-row">
+        <label class="form-label">Тип</label>
+        <select class="form-input" id="da-type">
+          <option value="кредитка">Кредитка</option>
+          <option value="поставщик">Поставщик</option>
+          <option value="займ">Займ</option>
+          <option value="прочее">Прочее</option>
+        </select>
+      </div>
+      <div class="form-row-2">
+        <div>
+          <label class="form-label">Сумма долга, ₽</label>
+          <input class="form-input" type="number" id="da-initial" placeholder="0" inputmode="decimal" min="0">
+        </div>
+        <div>
+          <label class="form-label">Уже погашено, ₽</label>
+          <input class="form-input" type="number" id="da-paid" placeholder="0" inputmode="decimal" min="0">
+        </div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Дата</label>
+        <input class="form-input" type="date" id="da-date">
+      </div>
+    </div>
+
+    <button class="btn-submit" id="debt-submit" onclick="submitDebt()">Сохранить</button>
+    <button class="btn-cancel" onclick="closeDebtModal()">Отмена</button>
+  </div>
+</div>
 
 <script>
 const DATA_URL = './data.json';
@@ -1070,11 +1144,11 @@ function renderDebtList(debts, total, listId, totalId) {
   el.innerHTML = debts.map(d=>{
     const cfg=DEBT_ICONS[d.type]||DEBT_ICONS['прочее'];
     const initial=Number(d.initial)||0, paid=Number(d.paid)||0;
-    // remaining: prefer explicit field, fallback to calculation
     const remaining=Number(d.remaining)||(initial-paid)||0;
     const pct=initial>0?Math.min(Math.round(paid/initial*100),100):0;
     const bar=cfg.textColor==='var(--red)'?'linear-gradient(90deg,#c0392b,#ff4d4f)':'linear-gradient(90deg,#e67e22,#ffbb33)';
-    return `<div class="debt-item"><div class="debt-icon-box" style="background:${cfg.color};color:${cfg.textColor}"><i class="${cfg.icon}"></i></div><div class="debt-info"><div class="debt-name">${d.creditor}</div><div class="debt-bar-wrap"><div class="debt-bar" style="width:${pct}%;background:${bar}"></div></div><div class="debt-meta"><span>Погашено ${pct}%</span><span>было ${fmt(initial)}</span></div></div><div class="debt-amount" style="color:${cfg.textColor}">${fmt(remaining)}</div></div>`;
+    const credSafe=d.creditor.replace(/'/g,"\\'");
+    return `<div class="debt-item"><div class="debt-icon-box" style="background:${cfg.color};color:${cfg.textColor}"><i class="${cfg.icon}"></i></div><div class="debt-info"><div class="debt-name">${d.creditor}</div><div class="debt-bar-wrap"><div class="debt-bar" style="width:${pct}%;background:${bar}"></div></div><div class="debt-meta"><span>Погашено ${pct}%</span><span>было ${fmt(initial)}</span></div><button class="debt-pay-btn" onclick="openPayDebt('${credSafe}',${remaining})"><i class="ri-money-cny-circle-line"></i> Внести платёж</button></div><div class="debt-amount" style="color:${cfg.textColor}">${fmt(remaining)}</div></div>`;
   }).join('');
 }
 
@@ -1167,6 +1241,116 @@ if (chartjsEl) {
   });
 }
 
+// ── DEBT MODAL ──
+var debtTab = 'pay';
+
+function openPayDebt(creditorName, remaining) {
+  debtTab = 'pay';
+  _syncDebtTabs();
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('dp-date').value = today;
+  document.getElementById('dp-amount').value = '';
+  // Fill creditor selector
+  _fillDebtCreditorSelect(creditorName);
+  // Show remaining hint
+  _updateDebtHint();
+  document.getElementById('debtModal').classList.add('open');
+}
+
+function openAddDebt() {
+  debtTab = 'add';
+  _syncDebtTabs();
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('da-date').value = today;
+  document.getElementById('da-creditor').value = '';
+  document.getElementById('da-initial').value = '';
+  document.getElementById('da-paid').value = '0';
+  document.getElementById('debt-submit').disabled = false;
+  document.getElementById('debt-submit').textContent = 'Сохранить';
+  document.getElementById('debtModal').classList.add('open');
+}
+
+function closeDebtModal() {
+  document.getElementById('debtModal').classList.remove('open');
+}
+
+function switchDebtTab(tab) {
+  debtTab = tab;
+  _syncDebtTabs();
+}
+
+function _syncDebtTabs() {
+  document.getElementById('dtab-pay').classList.toggle('active', debtTab === 'pay');
+  document.getElementById('dtab-add').classList.toggle('active', debtTab === 'add');
+  document.getElementById('debt-pay-section').style.display = debtTab === 'pay' ? '' : 'none';
+  document.getElementById('debt-add-section').style.display = debtTab === 'add' ? '' : 'none';
+  document.getElementById('debt-submit').textContent = debtTab === 'pay' ? 'Внести платёж' : 'Добавить долг';
+}
+
+function _fillDebtCreditorSelect(preselect) {
+  const sel = document.getElementById('dp-creditor');
+  sel.innerHTML = '';
+  const debts = (allData && allData.debts || []).filter(function(d){ return d.status === 'активный'; });
+  debts.forEach(function(d) {
+    const o = document.createElement('option');
+    o.value = d.creditor;
+    o.textContent = d.creditor;
+    o.dataset.remaining = (Number(d.remaining)||(Number(d.initial||0)-Number(d.paid||0)))||0;
+    if (d.creditor === preselect) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.onchange = _updateDebtHint;
+  _updateDebtHint();
+}
+
+function _updateDebtHint() {
+  const sel = document.getElementById('dp-creditor');
+  const opt = sel && sel.options[sel.selectedIndex];
+  const rem = opt ? Number(opt.dataset.remaining) : 0;
+  const hint = document.getElementById('dp-remaining-hint');
+  if (hint) hint.textContent = rem > 0 ? ('Остаток долга: ' + fmt(rem)) : '';
+}
+
+async function submitDebt() {
+  const btn = document.getElementById('debt-submit');
+  if (!SCRIPT_URL) { showToast('⚠️ Укажите SCRIPT_URL в коде дашборда'); return; }
+  btn.disabled = true;
+
+  var payload;
+  if (debtTab === 'pay') {
+    const creditor = document.getElementById('dp-creditor').value;
+    const amount = parseFloat(document.getElementById('dp-amount').value);
+    const date = document.getElementById('dp-date').value;
+    if (!creditor || !amount || amount <= 0) { alert('Укажите кредитора и сумму'); btn.disabled=false; return; }
+    payload = { action: 'pay_debt', creditor, amount, date };
+    btn.textContent = 'Отправляем...';
+  } else {
+    const creditor = document.getElementById('da-creditor').value.trim();
+    const initial = parseFloat(document.getElementById('da-initial').value) || 0;
+    const paid = parseFloat(document.getElementById('da-paid').value) || 0;
+    const date = document.getElementById('da-date').value;
+    const debtType = document.getElementById('da-type').value;
+    if (!creditor || !initial) { alert('Укажите кредитора и сумму долга'); btn.disabled=false; return; }
+    payload = { action: 'add_debt', creditor, debtType, initial, paid, date };
+    btn.textContent = 'Добавляем...';
+  }
+
+  try {
+    await fetch(SCRIPT_URL, {
+      method: 'POST', mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    closeDebtModal();
+    showToast(debtTab === 'pay' ? '✓ Платёж записан! Обновляем...' : '✓ Долг добавлен! Обновляем...');
+    setTimeout(function() { forceRefresh(); }, 800);
+  } catch(e) {
+    alert('Ошибка: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = debtTab === 'pay' ? 'Внести платёж' : 'Добавить долг';
+  }
+}
+
 // ── CATEGORY COLLAPSE ──
 function toggleCatSubs(subId, btn) {
   const el = document.getElementById(subId);
@@ -1185,7 +1369,7 @@ function toggleCatSubs(subId, btn) {
 
 // ── SCRIPT_URL for adding transactions ──
 // Fill in your Google Apps Script Web App URL here:
-const SCRIPT_URL = '';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwMKXVzy8N8bt2FgmEGyaGVSR5aUisMfjKL9PombRJ3Iky6XgTXLY8FGhpu6dmTNdBZ/exec';
 
 // ── AUTO-BUDGET RINGS ──
 function calcAutoBudgets(allOps, currentMonthKey) {
