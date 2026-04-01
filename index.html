@@ -323,11 +323,6 @@ window.onerror = function(msg, src, line) {
     <span id="mobile-view-title">ФинТрекер</span>
   </div>
   <div class="mobile-header-right">
-    <div class="group-toggle" style="transform:scale(0.88);transform-origin:right center">
-      <button class="group-btn active" id="gbtn-all-m"    onclick="setGroup('all')">Всё</button>
-      <button class="group-btn"        id="gbtn-личное-m" onclick="setGroup('личное')">Лич</button>
-      <button class="group-btn"        id="gbtn-работа-m" onclick="setGroup('работа')">Раб</button>
-    </div>
     <select id="monthSelectMobile" onchange="syncMonth('mobile')"></select>
     <div class="mobile-refresh" onclick="forceRefresh()"><i class="ri-refresh-line"></i></div>
   </div>
@@ -371,11 +366,6 @@ window.onerror = function(msg, src, line) {
       <p id="header-subtitle">Загрузка...</p>
     </div>
     <div class="header-right">
-      <div class="group-toggle">
-        <button class="group-btn active" id="gbtn-all"     onclick="setGroup('all')">Всё</button>
-        <button class="group-btn"        id="gbtn-личное"  onclick="setGroup('личное')">Личное</button>
-        <button class="group-btn"        id="gbtn-работа"  onclick="setGroup('работа')">Работа</button>
-      </div>
       <select class="month-selector" id="monthSelect" onchange="syncMonth('desktop')"></select>
       <button class="btn-refresh" onclick="forceRefresh()"><i class="ri-refresh-line"></i> Обновить</button>
     </div>
@@ -386,7 +376,7 @@ window.onerror = function(msg, src, line) {
     <div class="kpi-grid">
       <div class="kpi-card c-teal">
         <div class="kpi-icon-box teal"><i class="ri-wallet-3-line"></i></div>
-        <div class="kpi-label">Свободные деньги</div>
+        <div class="kpi-label">Баланс</div>
         <div class="kpi-value" id="kpi-balance">—</div>
         <div class="kpi-sub" id="kpi-balance-sub"></div>
         <div class="kpi-delta" id="kpi-balance-delta"></div>
@@ -583,6 +573,7 @@ window.onerror = function(msg, src, line) {
           <option>Одежда</option>
           <option>Развлечения</option>
           <option>Заказ</option>
+          <option>Долг/кредит</option>
           <option>Прочее</option>
         </select>
       </div>
@@ -731,6 +722,7 @@ const CAT_CONFIG = {
   'Заказ':            { icon:'ri-briefcase-line',          color:'#00c49a', grad:['#00997a','#00c49a'], cls:'income' },
   'Прочий доход':     { icon:'ri-money-dollar-circle-line',color:'#7e5bef', grad:['#6d28d9','#7e5bef'], cls:'income' },
   'Компенсация':      { icon:'ri-refund-2-line',           color:'#00c49a', grad:['#00997a','#00c49a'], cls:'income' },
+  'Долг/кредит':      { icon:'ri-bank-card-2-line',         color:'#ff4d4f', grad:['#c0392b','#ff4d4f'], cls:'other'  },
   'Прочее':           { icon:'ri-more-line',               color:'#5a5a5a', grad:['#3a3a3a','#5a5a5a'], cls:'other'  },
 };
 const DEBT_ICONS = {
@@ -909,14 +901,24 @@ function renderDashboard(monthKey) {
   const totalExp = expOps.reduce((s,o) => s + Number(o.amount), 0);
   const totalComp = compOps.reduce((s,o) => s + Number(o.amount), 0);
   const totalDebt = debts.reduce((s,d) => { const rem=Number(d.remaining); const ini=Number(d.initial)||0, paid=Number(d.paid)||0; return s+(isNaN(rem)?(ini-paid):rem); }, 0);
-  const balance = totalInc - totalExp;
 
-  // Предыдущий месяц для дельты
+  // Кумулятивный баланс — сумма всех операций от начала до конца выбранного месяца
+  const cumOps = allData.operations.filter(o => { const m=toYYYYMM(o.date); return m && m <= monthKey; });
+  const cumInc = cumOps.filter(o=>o.type==='доход'||o.type==='компенсация').reduce((s,o)=>s+Number(o.amount),0);
+  const cumExp = cumOps.filter(o=>o.type==='расход').reduce((s,o)=>s+Number(o.amount),0);
+  const balance = cumInc - cumExp;
+
+  // Предыдущий месяц для дельт
   const prevKey = prevMonth(monthKey);
-  const prevOps = filterByGroup(allData.operations.filter(o => toYYYYMM(o.date) === prevKey));
-  const prevInc = prevOps.filter(o => o.type==='доход'||o.type==='компенсация').reduce((s,o)=>s+Number(o.amount),0);
-  const prevExp = prevOps.filter(o => o.type==='расход').reduce((s,o)=>s+Number(o.amount),0);
-  const prevBal = prevInc - prevExp;
+  const prevOps = allData.operations.filter(o => toYYYYMM(o.date) === prevKey);
+  const prevInc = prevOps.filter(o=>o.type==='доход'||o.type==='компенсация').reduce((s,o)=>s+Number(o.amount),0);
+  const prevExp = prevOps.filter(o=>o.type==='расход').reduce((s,o)=>s+Number(o.amount),0);
+  // Кумулятивный баланс на конец прошлого месяца (для дельты баланса)
+  const prevCumOps = allData.operations.filter(o => { const m=toYYYYMM(o.date); return m && m <= prevKey; });
+  const prevBal = prevCumOps.filter(o=>o.type==='доход'||o.type==='компенсация').reduce((s,o)=>s+Number(o.amount),0)
+                - prevCumOps.filter(o=>o.type==='расход').reduce((s,o)=>s+Number(o.amount),0);
+
+  const monthInc = totalInc, monthExp = totalExp; // для подписей этого месяца
 
   document.getElementById('kpi-balance').textContent  = fmt(balance);
   document.getElementById('kpi-income').textContent   = fmt(totalInc);
@@ -925,7 +927,7 @@ function renderDashboard(monthKey) {
   document.getElementById('kpi-income-sub').textContent   = incOps.length + ' операций';
   document.getElementById('kpi-expenses-sub').textContent = expOps.length + ' операций' + (totalComp > 0 ? ' · компенс. ' + fmt(totalComp) : '');
   document.getElementById('kpi-debts-sub').textContent    = debts.length + ' кредитора';
-  document.getElementById('kpi-balance-sub').textContent  = balance >= 0 ? 'доходы превышают расходы' : 'расходы превышают доходы';
+  document.getElementById('kpi-balance-sub').textContent  = 'этот мес.: ' + (monthInc - monthExp >= 0 ? '+' : '') + fmt(monthInc - monthExp).replace('₽ ','₽');
   document.getElementById('header-subtitle').textContent  = 'Обновлено только что · ' + monthLabel(monthKey);
   document.getElementById('chart-period').textContent     = monthLabel(monthKey);
 
@@ -1391,7 +1393,7 @@ function toggleCatSubs(subId, btn) {
 
 // ── SCRIPT_URL for adding transactions ──
 // Fill in your Google Apps Script Web App URL here:
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzAhFZDUAhwx3aMles0S2lXbCiWZ4DUj2z5FGeD5782ZZUo7yBwvu-9VbqtyYq3HSss/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzGdZQQi0VJ9Rsn1LekuaiIvg7m6FIIt1SpBfR1t4aE0EnA-msng4FuCM1OSt0dxDIi/exec';
 
 // ── AUTO-BUDGET RINGS ──
 function calcAutoBudgets(allOps, currentMonthKey) {
