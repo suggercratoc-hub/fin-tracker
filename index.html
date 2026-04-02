@@ -792,8 +792,9 @@ function renderView(view) {
 }
 
 // ── LOAD ──
-const CACHE_KEY = 'fintracker_data';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_KEY   = 'fintracker_data';
+const PENDING_KEY = 'fintracker_pending';
+const CACHE_TTL   = 5 * 60 * 1000; // 5 minutes
 
 function getCached() {
   try {
@@ -809,8 +810,39 @@ function setCache(data) {
   try { localStorage.setItem(CACHE_KEY, JSON.stringify({ ts: Date.now(), data })); } catch(e) {}
 }
 
+// ── PENDING OPS — сохраняются в localStorage, живут до подтверждения сервером ──
+function getPendingOps() {
+  try { return JSON.parse(localStorage.getItem(PENDING_KEY) || '[]'); } catch(e) { return []; }
+}
+
+function savePendingOp(op) {
+  const list = getPendingOps();
+  list.push(Object.assign({}, op, { _pid: Date.now() }));
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(list)); } catch(e) {}
+}
+
+// Применяем pending ops к данным — убираем те что уже есть на сервере
+function mergePending(data) {
+  const list = getPendingOps();
+  if (!list.length) return data;
+  const ops = data.operations || [];
+  // Считаем подтверждёнными те pending, которые уже есть в свежих данных
+  const unconfirmed = list.filter(function(p) {
+    return !ops.some(function(o) {
+      return o.date === p.date &&
+             Number(o.amount) === Number(p.amount) &&
+             o.type === p.type &&
+             (o.category || '') === (p.category || '');
+    });
+  });
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify(unconfirmed)); } catch(e) {}
+  if (!unconfirmed.length) return data;
+  // Добавляем неподтверждённые в конец списка операций
+  return Object.assign({}, data, { operations: ops.concat(unconfirmed) });
+}
+
 function applyData(data) {
-  allData = data;
+  allData = mergePending(data);
   populateMonthSelectors();
   const month = document.getElementById('monthSelect').value;
   renderDashboard(month);
@@ -1264,10 +1296,11 @@ function forceRefresh() {
 var _pollTimer = null;
 function startPollingForUpdate() {
   if (_pollTimer) return; // уже запущен
-  // Запоминаем текущую «подпись» данных чтобы сравнить
-  const snapshot = allData ? JSON.stringify(allData.operations.length + '_' + (allData.operations[allData.operations.length - 1] || {}).date) : '';
+  // Снимок берём по числу операций БЕЗ pending (серверная база до нашего изменения)
+  const pending = getPendingOps();
+  const serverOpsCount = allData ? allData.operations.length - pending.length : 0;
   var attempts = 0;
-  var maxAttempts = 20; // максимум 60 секунд (20 × 3с)
+  var maxAttempts = 25; // максимум 75 секунд (25 × 3с)
   _pollTimer = setInterval(async function() {
     attempts++;
     if (attempts > maxAttempts) {
@@ -1278,15 +1311,12 @@ function startPollingForUpdate() {
       const res = await fetch(DATA_URL + '?t=' + Date.now());
       if (!res.ok) return;
       const fresh = await res.json();
-      const freshSnap = JSON.stringify(fresh.operations.length + '_' + (fresh.operations[fresh.operations.length - 1] || {}).date);
-      if (freshSnap !== snapshot) {
-        // Данные изменились — обновляем
+      // Сервер обновился когда кол-во операций стало больше исходного
+      if ((fresh.operations || []).length > serverOpsCount) {
         clearInterval(_pollTimer); _pollTimer = null;
-        try { localStorage.removeItem(CACHE_KEY); } catch(e) {}
-        allData = fresh;
+        // applyData сам уберёт подтверждённые pending и добавит оставшиеся
         setCache(fresh);
-        const curMonth = document.getElementById('monthSelect') ? document.getElementById('monthSelect').value : '';
-        if (curMonth) renderDashboard(curMonth);
+        applyData(fresh);
         showToast('✓ Данные синхронизированы');
       }
     } catch(e) {}
@@ -1417,12 +1447,12 @@ async function submitDebt() {
     // Оптимистичное обновление — не ждём GitHub Actions (15 мин)
     if (debtTab === 'pay' && allData) {
       const payDate = payload.date || new Date().toISOString().split('T')[0];
-      // Добавляем расход в локальные данные чтобы баланс сразу уменьшился
-      allData.operations.push({
-        date: payDate, amount: payload.amount, type: 'расход',
+      const debtOp = { date: payDate, amount: payload.amount, type: 'расход',
         group: 'личное', category: 'Долг/кредит',
-        desc: 'Платёж: ' + payload.creditor, source: 'dashboard', order: '', subcategory: ''
-      });
+        desc: 'Платёж: ' + payload.creditor, source: 'dashboard', order: '', subcategory: '' };
+      // Сохраняем в pending — выживет при любом refresh
+      savePendingOp(debtOp);
+      allData.operations.push(debtOp);
       // Обновляем долг в списке
       allData.debts = allData.debts.map(function(d) {
         if (d.creditor !== payload.creditor) return d;
@@ -1430,6 +1460,7 @@ async function submitDebt() {
         const newRem = Math.max((Number(d.initial) || 0) - newPaid, 0);
         return Object.assign({}, d, { paid: newPaid, remaining: newRem, lastPay: payDate, status: newRem === 0 ? 'погашен' : d.status });
       });
+      setCache(allData); // обновляем кэш
       const curMonth = document.getElementById('monthSelect') ? document.getElementById('monthSelect').value : toYYYYMM(payDate);
       renderDashboard(curMonth);
       showToast('✓ Платёж записан');
@@ -1690,9 +1721,12 @@ async function submitExpense() {
         });
         if (idx !== -1) allData.operations[idx] = Object.assign({}, allData.operations[idx], { date, amount, type, group, category, desc, subcategory: subcat });
       } else {
-        // Новая операция: добавляем локально
-        allData.operations.push({ date, amount, type, group, category, desc, source: 'dashboard', order: '', subcategory: subcat });
+        // Новая операция: сохраняем в pending (выживет при любом refresh)
+        const newOp = { date, amount, type, group, category, desc, source: 'dashboard', order: '', subcategory: subcat };
+        savePendingOp(newOp);
+        allData.operations.push(newOp);
       }
+      setCache(allData); // обновляем кэш с новыми данными
       closeAddExpense();
       renderDashboard(curMonth);
       showToast(_editingOp ? '✓ Изменено' : '✓ Добавлено');
