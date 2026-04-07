@@ -1807,6 +1807,9 @@ function showToast(msg) {
   setTimeout(function() { el.classList.remove('show'); }, 3000);
 }
 
+// TEMP: сброс pending при загрузке
+try { localStorage.removeItem('fintracker_pending'); } catch(e) {}
+try { localStorage.removeItem('fintracker_cache'); } catch(e) {}
 // Сброс зависших pending ops через ?reset=1 в URL (работает на мобилке)
 if (new URLSearchParams(window.location.search).get('reset') === '1') {
   try { localStorage.removeItem(PENDING_KEY); } catch(e) {}
