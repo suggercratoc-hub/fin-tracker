@@ -1765,6 +1765,13 @@ function showToast(msg) {
   setTimeout(function() { el.classList.remove('show'); }, 3000);
 }
 
+// Сброс зависших pending ops через ?reset=1 в URL (работает на мобилке)
+if (new URLSearchParams(window.location.search).get('reset') === '1') {
+  try { localStorage.removeItem(PENDING_KEY); } catch(e) {}
+  try { localStorage.removeItem(CACHE_KEY); } catch(e) {}
+  history.replaceState(null,'', window.location.pathname);
+  showToast('🗑 Зависшие операции очищены');
+}
 loadData();
 </script>
 </body>
