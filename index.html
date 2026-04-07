@@ -1132,7 +1132,11 @@ function renderIncomeView(ops) {
 function renderExpensesView(ops) {
   const all = ops.filter(o=>o.type==='расход').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
   const personal = all.filter(o => (o.group||'').toLowerCase() !== 'работа');
-  const work     = all.filter(o => (o.group||'').toLowerCase() === 'работа');
+  // Рабочие расходы — за все месяцы (как в карточке дашборда)
+  const allWorkOps = (allData && allData.operations ? allData.operations : ops);
+  const work = allWorkOps
+    .filter(o => o.type==='расход' && (o.group||'').toLowerCase()==='работа')
+    .sort((a,b)=>(b.date||'').localeCompare(a.date||''));
 
   const totalAll      = all.reduce((s,o)=>s+Number(o.amount),0);
   const totalPersonal = personal.reduce((s,o)=>s+Number(o.amount),0);
@@ -1807,9 +1811,6 @@ function showToast(msg) {
   setTimeout(function() { el.classList.remove('show'); }, 3000);
 }
 
-// TEMP: сброс pending при загрузке
-try { localStorage.removeItem('fintracker_pending'); } catch(e) {}
-try { localStorage.removeItem('fintracker_cache'); } catch(e) {}
 // Сброс зависших pending ops через ?reset=1 в URL (работает на мобилке)
 if (new URLSearchParams(window.location.search).get('reset') === '1') {
   try { localStorage.removeItem(PENDING_KEY); } catch(e) {}
