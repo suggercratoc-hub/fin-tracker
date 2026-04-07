@@ -494,13 +494,22 @@ window.onerror = function(msg, src, line) {
       <div class="view-total expense" id="expenses-total">—</div>
       <p id="expenses-count"></p>
     </div>
+    <!-- Личные расходы -->
     <div class="card" style="margin-bottom:16px">
-      <div class="card-title">По категориям</div>
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span>Личные расходы</span>
+        <span id="expenses-personal-total" style="color:var(--red);font-size:14px;font-weight:600"></span>
+      </div>
       <div id="expenses-cats"></div>
-    </div>
-    <div class="card">
-      <div class="card-title">Все расходы</div>
       <div class="tx-list-full" id="expenses-list"></div>
+    </div>
+    <!-- Рабочие расходы к возврату -->
+    <div class="card" id="expenses-work-card" style="margin-bottom:16px">
+      <div class="card-title" style="display:flex;justify-content:space-between;align-items:center">
+        <span><i class="ri-briefcase-line" style="color:#ffbb33;margin-right:6px"></i>Рабочие (к возврату)</span>
+        <span id="expenses-work-total" style="color:#ffbb33;font-size:14px;font-weight:600"></span>
+      </div>
+      <div class="tx-list-full" id="expenses-work-list"></div>
     </div>
   </div>
 
@@ -1121,21 +1130,35 @@ function renderIncomeView(ops) {
 
 // ── EXPENSES VIEW ──
 function renderExpensesView(ops) {
-  const list = ops.filter(o=>o.type==='расход').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
-  const total = list.reduce((s,o)=>s+Number(o.amount),0);
-  document.getElementById('expenses-total').textContent = fmt(total);
-  document.getElementById('expenses-count').textContent = list.length+' операций';
+  const all = ops.filter(o=>o.type==='расход').sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const personal = all.filter(o => (o.group||'').toLowerCase() !== 'работа');
+  const work     = all.filter(o => (o.group||'').toLowerCase() === 'работа');
 
+  const totalAll      = all.reduce((s,o)=>s+Number(o.amount),0);
+  const totalPersonal = personal.reduce((s,o)=>s+Number(o.amount),0);
+  const totalWork     = work.reduce((s,o)=>s+Number(o.amount),0);
+
+  document.getElementById('expenses-total').textContent = fmt(totalAll);
+  document.getElementById('expenses-count').textContent = all.length+' операций';
+  document.getElementById('expenses-personal-total').textContent = fmt(totalPersonal);
+  document.getElementById('expenses-work-total').textContent = fmt(totalWork);
+
+  // Скрыть карточку рабочих если пусто
+  const workCard = document.getElementById('expenses-work-card');
+  if (workCard) workCard.style.display = work.length ? '' : 'none';
+
+  // Категории только личных
   const catMap = {};
-  list.forEach(o => {
+  personal.forEach(o => {
     const c = o.category || 'Прочее';
     if (!catMap[c]) catMap[c] = { total: 0, subs: {} };
     catMap[c].total += Number(o.amount);
     if (o.subcategory) catMap[c].subs[o.subcategory] = (catMap[c].subs[o.subcategory] || 0) + Number(o.amount);
   });
   const cats = Object.entries(catMap).map(([k,v]) => [k, v.total, v.subs]).sort((a,b) => b[1]-a[1]);
-  renderCatBarsWithSubs(cats, total, 'expenses-cats', 'var(--red)');
-  renderTxList(list, 'expenses-list');
+  renderCatBarsWithSubs(cats, totalPersonal, 'expenses-cats', 'var(--red)');
+  renderTxList(personal, 'expenses-list');
+  renderTxList(work, 'expenses-work-list');
 }
 
 // ── DEBTS VIEW ──
