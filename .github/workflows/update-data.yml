@@ -24,7 +24,7 @@ jobs:
       - name: Fetch data from Apps Script
         run: |
           curl -L --max-time 30 \
-            "https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec" \
+            "https://script.google.com/macros/s/AKfycbwAzVb2VDMKwE5jtGAQYaonf9wzXhtKN0VMZiuY1u-sxcXpvnfo60Vd1l6TGXVFtd9Y/exec?nocache=1" \
             -o data.json
 
       - name: Validate JSON
