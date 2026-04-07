@@ -367,7 +367,7 @@ window.onerror = function(msg, src, line) {
     </div>
     <div class="header-right">
       <select class="month-selector" id="monthSelect" onchange="syncMonth('desktop')"></select>
-      <button class="btn-refresh" onclick="forceRefresh()"><i class="ri-refresh-line"></i> Обновить</button>
+      <button class="btn-refresh" onclick="forceRefresh()" ondblclick="clearPendingAndRefresh()" title="Двойной клик — очистить зависшие операции"><i class="ri-refresh-line"></i> Обновить</button>
     </div>
   </div>
 
@@ -1297,6 +1297,13 @@ function renderLineChart(ops, monthKey) {
 
 function forceRefresh() {
   try { localStorage.removeItem(CACHE_KEY); } catch(e) {}
+  loadData();
+}
+
+function clearPendingAndRefresh() {
+  try { localStorage.removeItem(PENDING_KEY); } catch(e) {}
+  try { localStorage.removeItem(CACHE_KEY); } catch(e) {}
+  showToast('🗑 Зависшие операции очищены');
   loadData();
 }
 
