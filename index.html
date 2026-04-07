@@ -324,7 +324,7 @@ window.onerror = function(msg, src, line) {
   </div>
   <div class="mobile-header-right">
     <select id="monthSelectMobile" onchange="syncMonth('mobile')"></select>
-    <div class="mobile-refresh" onclick="forceRefresh()"><i class="ri-refresh-line"></i></div>
+    <div class="mobile-refresh" id="mobile-refresh-btn" onclick="forceRefresh()"><i class="ri-refresh-line"></i></div>
   </div>
 </div>
 
@@ -1329,6 +1329,25 @@ function clearPendingAndRefresh() {
   showToast('🗑 Зависшие операции очищены');
   loadData();
 }
+
+// Долгое нажатие на кнопку обновления (мобилка/Telegram) → сброс pending
+(function() {
+  var _pressTimer = null;
+  function startPress() {
+    _pressTimer = setTimeout(function() {
+      _pressTimer = null;
+      clearPendingAndRefresh();
+    }, 1500);
+  }
+  function cancelPress() { if (_pressTimer) { clearTimeout(_pressTimer); _pressTimer = null; } }
+  document.addEventListener('DOMContentLoaded', function() {
+    var btn = document.getElementById('mobile-refresh-btn');
+    if (!btn) return;
+    btn.addEventListener('touchstart', startPress, { passive: true });
+    btn.addEventListener('touchend',   cancelPress);
+    btn.addEventListener('touchmove',  cancelPress);
+  });
+})();
 
 // Поллинг после записи — ждём пока data.json изменится (GitHub Actions ~20с)
 var _pollTimer = null;
